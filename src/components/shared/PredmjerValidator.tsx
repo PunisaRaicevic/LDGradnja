@@ -7,7 +7,6 @@ import {
   Bot, AlertTriangle, AlertCircle, Info, CheckCircle2, XCircle,
   Loader2, Calculator, FileQuestion, GitBranch, Brain, Check,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
 import { validateAllLocal } from '@/lib/predmjer-validator';
 import { validateWithAI } from '@/lib/ai-validator';
 import type { BillItem } from '@/types';
