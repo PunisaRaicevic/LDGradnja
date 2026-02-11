@@ -9,8 +9,10 @@ RUN ./configure --prefix=/opt/libredwg --disable-shared --disable-write --disabl
     make -j1 dwg2dxf && \
     install -D programs/dwg2dxf /opt/libredwg/bin/dwg2dxf
 
-# Stage 2: Build React frontend
+# Stage 2: Build React frontend (depends on libredwg-build to force sequential execution)
 FROM node:20-slim AS frontend-build
+# Force BuildKit to finish libredwg-build before starting this stage
+COPY --from=libredwg-build /opt/libredwg/bin/dwg2dxf /tmp/.buildorder
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=384
 COPY package.json package-lock.json ./
