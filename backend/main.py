@@ -16,6 +16,9 @@ app.add_middleware(
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
+print(f"[startup] STATIC_DIR={STATIC_DIR}, exists={STATIC_DIR.is_dir()}")
+if STATIC_DIR.is_dir():
+    print(f"[startup] static contents: {list(STATIC_DIR.iterdir())}")
 
 
 @app.get("/health")
@@ -104,12 +107,18 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
 
 # Serve frontend static files (JS, CSS, images, etc.)
 if STATIC_DIR.is_dir():
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    # Mount assets directory if it exists
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve index.html for all non-API routes (SPA client-side routing)."""
         file_path = STATIC_DIR / full_path
         if file_path.is_file():
-            return FileResponse(file_path)
-        return FileResponse(STATIC_DIR / "index.html")
+            return FileResponse(str(file_path))
+        index = STATIC_DIR / "index.html"
+        if index.is_file():
+            return FileResponse(str(index))
+        return {"error": "Frontend not built"}
