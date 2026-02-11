@@ -4,13 +4,12 @@ FROM python:3.11-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git build-essential pkg-config \
     autoconf automake libtool texinfo \
-    libpcre2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth 1 --branch 0.13.3 https://github.com/LibreDWG/libredwg.git /tmp/libredwg \
+RUN git clone --depth 1 --branch 0.12.5 https://github.com/LibreDWG/libredwg.git /tmp/libredwg \
     && cd /tmp/libredwg \
     && autoreconf -fi \
-    && ./configure --prefix=/usr/local CFLAGS="-O2 -w" \
+    && ./configure --prefix=/usr/local --disable-json --disable-python --disable-bindings CFLAGS="-O2 -w" \
     && make -j$(nproc) \
     && make install
 
