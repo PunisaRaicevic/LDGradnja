@@ -14,11 +14,13 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-COPY backend/requirements.txt .
 RUN pip install --no-cache-dir numpy
 RUN pip install --no-cache-dir matplotlib==3.9.0
 RUN pip install --no-cache-dir ezdxf==1.4.3
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir fastapi==0.115.0
+RUN pip install --no-cache-dir "uvicorn[standard]==0.30.0"
+RUN pip install --no-cache-dir python-multipart==0.0.9
+RUN pip install --no-cache-dir httpx==0.27.0
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
