@@ -1,10 +1,11 @@
 import os
 import tempfile
 from pathlib import Path
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+import httpx
 
 app = FastAPI(title="LDGradnja Backend", version="1.0.0")
 
@@ -103,6 +104,38 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
 
         except Exception as e:
             raise HTTPException(500, f"SVG konverzija nije uspjela: {str(e)}")
+
+
+@app.api_route("/api/openai/{path:path}", methods=["POST", "GET"])
+async def openai_proxy(path: str, request: Request):
+    """Proxy requests to OpenAI API, forwarding Authorization header."""
+    auth = request.headers.get("Authorization")
+    if not auth:
+        raise HTTPException(401, "Missing Authorization header")
+
+    body = await request.body()
+    headers = {
+        "Authorization": auth,
+        "Content-Type": request.headers.get("Content-Type", "application/json"),
+    }
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        try:
+            resp = await client.request(
+                method=request.method,
+                url=f"https://api.openai.com/{path}",
+                headers=headers,
+                content=body,
+            )
+            return Response(
+                content=resp.content,
+                status_code=resp.status_code,
+                media_type=resp.headers.get("content-type", "application/json"),
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(504, "OpenAI API timeout")
+        except httpx.RequestError as e:
+            raise HTTPException(502, f"OpenAI API nedostupan: {str(e)}")
 
 
 # Serve frontend static files (JS, CSS, images, etc.)

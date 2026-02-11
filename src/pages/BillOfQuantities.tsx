@@ -18,6 +18,7 @@ import { analyzeExcelFile, convertAnalysisToBillItems, exportToExcel } from '@/l
 import type { ExcelAnalysis } from '@/lib/excel';
 import { UNITS } from '@/types';
 import type { BillItem } from '@/types';
+import PredmjerValidator from '@/components/shared/PredmjerValidator';
 
 const emptyItem = {
   ordinal: 0,
@@ -176,6 +177,14 @@ export default function BillOfQuantities() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
+          <PredmjerValidator
+            items={billItems}
+            onApplyFixes={async (fixes) => {
+              for (const fix of fixes) {
+                await updateBillItem(fix.id, fix.data);
+              }
+            }}
+          />
           {billItems.length > 0 && (
             <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)}>
               <Trash2 className="h-4 w-4 mr-2" />
