@@ -1,14 +1,5 @@
-# Stage 1: Get dwg2dxf from openSUSE (has libredwg-tools in repos)
-FROM opensuse/tumbleweed AS libredwg
-RUN zypper --non-interactive install libredwg-tools
-# Bundle dwg2dxf with all its shared libraries so it works on Debian
-RUN mkdir -p /dwg2dxf-bundle && \
-    cp /usr/bin/dwg2dxf /dwg2dxf-bundle/ && \
-    ldd /usr/bin/dwg2dxf | grep "=> /" | awk '{print $3}' | xargs -I{} cp {} /dwg2dxf-bundle/
-
-# Stage 2: Build React frontend (depends on libredwg to force sequential build)
+# Stage 1: Build React frontend
 FROM node:20-slim AS frontend-build
-COPY --from=libredwg /dwg2dxf-bundle/dwg2dxf /tmp/.buildorder
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=384
 COPY package.json package-lock.json ./
@@ -20,7 +11,7 @@ ENV VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 RUN npm run build
 
-# Stage 3: Python backend + serve built frontend
+# Stage 2: Python backend + serve built frontend
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -34,10 +25,18 @@ RUN pip install --no-cache-dir httpx==0.27.0
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
 
-# Copy dwg2dxf binary + its shared libraries
-COPY --from=libredwg /dwg2dxf-bundle/ /usr/local/lib/dwg2dxf/
-RUN ln -s /usr/local/lib/dwg2dxf/dwg2dxf /usr/local/bin/dwg2dxf
-ENV LD_LIBRARY_PATH=/usr/local/lib/dwg2dxf
+# Build dwg2dxf from source in a single layer (runs AFTER frontend build is done = no parallel OOM)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libc6-dev make curl xz-utils ca-certificates && \
+    curl -L https://github.com/LibreDWG/libredwg/releases/download/0.13.3/libredwg-0.13.3.tar.xz | tar xJ && \
+    cd libredwg-0.13.3 && \
+    ./configure --disable-shared --disable-write --disable-python && \
+    make -j1 programs/dwg2dxf && \
+    install programs/dwg2dxf /usr/local/bin/ && \
+    cd / && rm -rf libredwg-0.13.3 && \
+    apt-get purge -y gcc libc6-dev make curl xz-utils && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
