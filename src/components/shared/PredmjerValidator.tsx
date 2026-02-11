@@ -7,6 +7,7 @@ import {
   Bot, AlertTriangle, AlertCircle, Info, CheckCircle2, XCircle,
   Loader2, Calculator, FileQuestion, GitBranch, Brain, Check,
 } from 'lucide-react';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { validateAllLocal } from '@/lib/predmjer-validator';
 import { validateWithAI } from '@/lib/ai-validator';
 import type { BillItem } from '@/types';
@@ -47,6 +48,7 @@ type FilterCategory = 'all' | 'math' | 'missing_data' | 'structure' | 'semantic'
 type FilterSeverity = 'all' | 'error' | 'warning' | 'info';
 
 export default function PredmjerValidator({ items, onApplyFixes }: PredmjerValidatorProps) {
+  const { openaiApiKey } = useSettingsStore();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
@@ -82,7 +84,7 @@ export default function PredmjerValidator({ items, onApplyFixes }: PredmjerValid
   };
 
   const handleRunAI = async () => {
-    const apiKey = prompt('Unesite OpenAI API ključ:');
+    const apiKey = openaiApiKey || prompt('Unesite OpenAI API ključ:');
     if (!apiKey) return;
 
     setAiRunning(true);
