@@ -1,5 +1,4 @@
 import os
-import subprocess
 import tempfile
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,100 +21,71 @@ def health():
 
 @app.post("/convert/dwg-to-dxf")
 async def convert_dwg_to_dxf(file: UploadFile = File(...)):
+    """Convert DWG to DXF using ezdxf (supports DWG R2000-R2018)."""
     if not file.filename or not file.filename.lower().endswith(".dwg"):
         raise HTTPException(400, "Fajl mora biti .dwg format")
 
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, "Fajl je prevelik (max 50MB)")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = os.path.join(tmpdir, "input.dwg")
-        output_path = os.path.join(tmpdir, "input.dxf")
-
-        content = await file.read()
-        if len(content) > 50 * 1024 * 1024:  # 50MB limit
-            raise HTTPException(413, "Fajl je prevelik (max 50MB)")
+        output_path = os.path.join(tmpdir, "output.dxf")
 
         with open(input_path, "wb") as f:
             f.write(content)
 
-        result = subprocess.run(
-            ["dwg2dxf", input_path],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=tmpdir,
-        )
+        try:
+            import ezdxf
+            doc = ezdxf.readfile(input_path)
+            doc.saveas(output_path)
 
-        if not os.path.exists(output_path):
-            # Try alternative output naming
-            for fname in os.listdir(tmpdir):
-                if fname.endswith(".dxf"):
-                    output_path = os.path.join(tmpdir, fname)
-                    break
-
-        if os.path.exists(output_path):
             with open(output_path, "rb") as f:
                 dxf_content = f.read()
+
             return Response(
                 content=dxf_content,
                 media_type="application/dxf",
                 headers={"Content-Disposition": f"attachment; filename={file.filename.replace('.dwg', '.dxf')}"},
             )
-
-        error_msg = result.stderr or result.stdout or "Nepoznata greska pri konverziji"
-        raise HTTPException(500, f"Konverzija nije uspjela: {error_msg}")
+        except Exception as e:
+            raise HTTPException(500, f"Konverzija nije uspjela: {str(e)}")
 
 
 @app.post("/convert/dwg-to-svg")
 async def convert_dwg_to_svg(file: UploadFile = File(...)):
+    """Convert DWG to SVG using ezdxf + matplotlib."""
     if not file.filename or not file.filename.lower().endswith(".dwg"):
         raise HTTPException(400, "Fajl mora biti .dwg format")
 
+    content = await file.read()
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, "Fajl je prevelik (max 50MB)")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = os.path.join(tmpdir, "input.dwg")
-        dxf_path = os.path.join(tmpdir, "input.dxf")
-
-        content = await file.read()
-        if len(content) > 50 * 1024 * 1024:
-            raise HTTPException(413, "Fajl je prevelik (max 50MB)")
 
         with open(input_path, "wb") as f:
             f.write(content)
 
-        # Step 1: DWG -> DXF
-        subprocess.run(
-            ["dwg2dxf", input_path],
-            capture_output=True,
-            timeout=60,
-            cwd=tmpdir,
-        )
-
-        if not os.path.exists(dxf_path):
-            for fname in os.listdir(tmpdir):
-                if fname.endswith(".dxf"):
-                    dxf_path = os.path.join(tmpdir, fname)
-                    break
-
-        if not os.path.exists(dxf_path):
-            raise HTTPException(500, "DWG konverzija u DXF nije uspjela")
-
-        # Step 2: DXF -> SVG using ezdxf
         try:
             import ezdxf
             from ezdxf.addons.drawing import matplotlib as draw_mpl
-
-            doc = ezdxf.readfile(dxf_path)
-            msp = doc.modelspace()
-
-            svg_path = os.path.join(tmpdir, "output.svg")
-
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
+
+            doc = ezdxf.readfile(input_path)
+            msp = doc.modelspace()
 
             fig = plt.figure(figsize=(16, 12))
             ax = fig.add_axes([0, 0, 1, 1])
             ctx = draw_mpl.RenderContext(doc)
             out = draw_mpl.MatplotlibBackend(ax)
             draw_mpl.Frontend(ctx, out).draw_layout(msp)
+
+            svg_path = os.path.join(tmpdir, "output.svg")
             fig.savefig(svg_path, format="svg", bbox_inches="tight", pad_inches=0.1)
             plt.close(fig)
 
@@ -125,11 +95,4 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
             return Response(content=svg_content, media_type="image/svg+xml")
 
         except Exception as e:
-            # Fallback: return DXF if SVG conversion fails
-            with open(dxf_path, "rb") as f:
-                dxf_content = f.read()
-            return Response(
-                content=dxf_content,
-                media_type="application/dxf",
-                headers={"X-Fallback": "true", "X-Error": str(e)},
-            )
+            raise HTTPException(500, f"SVG konverzija nije uspjela: {str(e)}")
