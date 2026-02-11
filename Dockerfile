@@ -1,18 +1,14 @@
-# Stage 1: Build libredwg from source (dwg2dxf tool)
-FROM debian:bookworm-slim AS libredwg-build
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc make ca-certificates curl xz-utils \
-    && rm -rf /var/lib/apt/lists/*
-WORKDIR /src
-RUN curl -L https://github.com/LibreDWG/libredwg/releases/download/0.13.3/libredwg-0.13.3.tar.xz | tar xJ --strip-components=1
-RUN ./configure --prefix=/opt/libredwg --disable-shared --disable-write --disable-python && \
-    make -j1 dwg2dxf && \
-    install -D programs/dwg2dxf /opt/libredwg/bin/dwg2dxf
+# Stage 1: Get dwg2dxf from openSUSE (has libredwg-tools in repos)
+FROM opensuse/tumbleweed AS libredwg
+RUN zypper --non-interactive install libredwg-tools
+# Bundle dwg2dxf with all its shared libraries so it works on Debian
+RUN mkdir -p /dwg2dxf-bundle && \
+    cp /usr/bin/dwg2dxf /dwg2dxf-bundle/ && \
+    ldd /usr/bin/dwg2dxf | grep "=> /" | awk '{print $3}' | xargs -I{} cp {} /dwg2dxf-bundle/
 
-# Stage 2: Build React frontend (depends on libredwg-build to force sequential execution)
+# Stage 2: Build React frontend (depends on libredwg to force sequential build)
 FROM node:20-slim AS frontend-build
-# Force BuildKit to finish libredwg-build before starting this stage
-COPY --from=libredwg-build /opt/libredwg/bin/dwg2dxf /tmp/.buildorder
+COPY --from=libredwg /dwg2dxf-bundle/dwg2dxf /tmp/.buildorder
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=384
 COPY package.json package-lock.json ./
@@ -37,7 +33,11 @@ RUN pip install --no-cache-dir httpx==0.27.0
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
-COPY --from=libredwg-build /opt/libredwg/bin/dwg2dxf /usr/local/bin/dwg2dxf
+
+# Copy dwg2dxf binary + its shared libraries
+COPY --from=libredwg /dwg2dxf-bundle/ /usr/local/lib/dwg2dxf/
+RUN ln -s /usr/local/lib/dwg2dxf/dwg2dxf /usr/local/bin/dwg2dxf
+ENV LD_LIBRARY_PATH=/usr/local/lib/dwg2dxf
 
 EXPOSE 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
