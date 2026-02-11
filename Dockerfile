@@ -15,7 +15,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir matplotlib==3.9.0 && \
+    pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
