@@ -1,7 +1,6 @@
 # Stage 1: Build React frontend
 FROM node:20-slim AS frontend-build
 WORKDIR /app
-ENV NODE_OPTIONS=--max-old-space-size=384
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
@@ -24,19 +23,6 @@ RUN pip install --no-cache-dir httpx==0.27.0
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
-
-# Build dwg2dxf from source in a single layer (runs AFTER frontend build is done = no parallel OOM)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libc6-dev make curl xz-utils ca-certificates && \
-    curl -L https://github.com/LibreDWG/libredwg/releases/download/0.13.3/libredwg-0.13.3.tar.xz | tar xJ && \
-    cd libredwg-0.13.3 && \
-    ./configure --disable-shared --disable-write --disable-python && \
-    make -j1 programs/dwg2dxf && \
-    install programs/dwg2dxf /usr/local/bin/ && \
-    cd / && rm -rf libredwg-0.13.3 && \
-    apt-get purge -y gcc libc6-dev make curl xz-utils && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
