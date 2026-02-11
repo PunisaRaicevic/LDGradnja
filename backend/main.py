@@ -1,8 +1,10 @@
 import os
 import tempfile
+from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="LDGradnja Backend", version="1.0.0")
 
@@ -12,6 +14,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 @app.get("/health")
@@ -96,3 +100,16 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
 
         except Exception as e:
             raise HTTPException(500, f"SVG konverzija nije uspjela: {str(e)}")
+
+
+# Serve frontend static files (JS, CSS, images, etc.)
+if STATIC_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve index.html for all non-API routes (SPA client-side routing)."""
+        file_path = STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(STATIC_DIR / "index.html")
