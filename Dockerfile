@@ -15,7 +15,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir matplotlib==3.9.0 && \
+RUN pip install --no-cache-dir numpy && \
+    pip install --no-cache-dir matplotlib==3.9.0 --no-build-isolation && \
+    pip install --no-cache-dir ezdxf==1.4.3 && \
+    pip install --no-cache-dir httpx==0.27.0 && \
     pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ .
