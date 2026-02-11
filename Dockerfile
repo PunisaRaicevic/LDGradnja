@@ -14,6 +14,8 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends libredwg-tools && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir fastapi==0.115.0
 RUN pip install --no-cache-dir uvicorn[standard]==0.30.0
 RUN pip install --no-cache-dir python-multipart==0.0.9

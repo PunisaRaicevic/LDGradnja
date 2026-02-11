@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
@@ -45,9 +46,12 @@ async def convert_dwg_to_dxf(file: UploadFile = File(...)):
             f.write(content)
 
         try:
-            import ezdxf
-            doc = ezdxf.readfile(input_path)
-            doc.saveas(output_path)
+            result = subprocess.run(
+                ["dwg2dxf", "-o", output_path, input_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                raise HTTPException(500, f"Konverzija nije uspjela: {result.stderr}")
 
             with open(output_path, "rb") as f:
                 dxf_content = f.read()
@@ -57,6 +61,10 @@ async def convert_dwg_to_dxf(file: UploadFile = File(...)):
                 media_type="application/dxf",
                 headers={"Content-Disposition": f"attachment; filename={file.filename.replace('.dwg', '.dxf')}"},
             )
+        except subprocess.TimeoutExpired:
+            raise HTTPException(500, "Konverzija je istekla (timeout)")
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(500, f"Konverzija nije uspjela: {str(e)}")
 
@@ -78,13 +86,23 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
             f.write(content)
 
         try:
+            # Step 1: Convert DWG to DXF using LibreDWG
+            dxf_path = os.path.join(tmpdir, "input.dxf")
+            result = subprocess.run(
+                ["dwg2dxf", "-o", dxf_path, input_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                raise HTTPException(500, f"DWG→DXF konverzija nije uspjela: {result.stderr}")
+
+            # Step 2: Render DXF to SVG using ezdxf + matplotlib
             import ezdxf
             from ezdxf.addons.drawing import matplotlib as draw_mpl
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
 
-            doc = ezdxf.readfile(input_path)
+            doc = ezdxf.readfile(dxf_path)
             msp = doc.modelspace()
 
             fig = plt.figure(figsize=(16, 12))
@@ -102,6 +120,10 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
 
             return Response(content=svg_content, media_type="image/svg+xml")
 
+        except subprocess.TimeoutExpired:
+            raise HTTPException(500, "Konverzija je istekla (timeout)")
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(500, f"SVG konverzija nije uspjela: {str(e)}")
 
