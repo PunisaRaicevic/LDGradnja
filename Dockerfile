@@ -1,4 +1,15 @@
-# Stage 1: Build React frontend
+# Stage 1: Build libredwg from source (dwg2dxf tool)
+FROM debian:bookworm-slim AS libredwg-build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc make ca-certificates curl xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+RUN curl -L https://github.com/LibreDWG/libredwg/releases/download/0.13.3/libredwg-0.13.3.tar.xz | tar xJ --strip-components=1
+RUN ./configure --prefix=/opt/libredwg --disable-shared --disable-write --disable-python && \
+    make -j1 dwg2dxf && \
+    install -D programs/dwg2dxf /opt/libredwg/bin/dwg2dxf
+
+# Stage 2: Build React frontend
 FROM node:20-slim AS frontend-build
 WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=384
@@ -11,7 +22,7 @@ ENV VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 RUN npm run build
 
-# Stage 2: Python backend + serve built frontend
+# Stage 3: Python backend + serve built frontend
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -24,8 +35,7 @@ RUN pip install --no-cache-dir httpx==0.27.0
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
-
-RUN apt-get update && apt-get install -y --no-install-recommends libredwg-tools && rm -rf /var/lib/apt/lists/*
+COPY --from=libredwg-build /opt/libredwg/bin/dwg2dxf /usr/local/bin/dwg2dxf
 
 EXPOSE 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
