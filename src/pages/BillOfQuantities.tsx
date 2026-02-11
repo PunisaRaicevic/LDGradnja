@@ -73,7 +73,7 @@ export default function BillOfQuantities() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // AI validation state
-  const { openaiApiKey, loadSettings } = useSettingsStore();
+  const { loadSettings } = useSettingsStore();
   const [aiValidating, setAiValidating] = useState(false);
   const [aiIssues, setAiIssues] = useState<ValidationIssue[]>([]);
   const [aiProgress, setAiProgress] = useState<ChunkProgress | null>(null);
