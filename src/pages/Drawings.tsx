@@ -83,23 +83,28 @@ export default function Drawings() {
     if (!drawing) return;
     setPreviewDrawing(drawing);
     setConvertError(null);
-    setConverting(false);
+    setPreviewUrl(null);
+    setPreviewBlob(null);
+    setConverting(true);
+    setPreviewOpen(true);
 
     const blob = await getDrawingFile(id);
-    if (!blob) return;
+    if (!blob) {
+      setConverting(false);
+      setConvertError('Nije moguće preuzeti fajl');
+      return;
+    }
 
     if (drawing.fileType === 'pdf') {
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
-      setPreviewBlob(null);
+      setConverting(false);
     } else if (drawing.fileType === 'dxf') {
       setPreviewBlob(blob);
-      setPreviewUrl(null);
+      setConverting(false);
     } else if (drawing.fileType === 'dwg') {
-      setPreviewUrl(null);
       // Try backend conversion if configured
       if (backendUrl) {
-        setConverting(true);
         try {
           const dxfBlob = await convertDwgToDxf(blob);
           setPreviewBlob(dxfBlob);
@@ -110,10 +115,11 @@ export default function Drawings() {
           setConverting(false);
         }
       } else {
-        setPreviewBlob(null);
+        setConverting(false);
       }
+    } else {
+      setConverting(false);
     }
-    setPreviewOpen(true);
   };
 
   const handleRetryConvert = async () => {
