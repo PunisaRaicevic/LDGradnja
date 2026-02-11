@@ -1,0 +1,43 @@
+name: Build dwg2dxf binary
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl xz-utils
+
+      - name: Download and extract libredwg 0.13.3
+        run: |
+          curl -L https://github.com/LibreDWG/libredwg/releases/download/0.13.3/libredwg-0.13.3.tar.xz | tar xJ
+          ls -la libredwg-0.13.3/
+
+      - name: Configure and build dwg2dxf
+        run: |
+          cd libredwg-0.13.3
+          ./configure --disable-shared --disable-write --disable-python
+          make -j$(nproc) programs/dwg2dxf
+          ls -la programs/dwg2dxf
+          file programs/dwg2dxf
+          ldd programs/dwg2dxf
+
+      - name: Copy binary to repo
+        run: |
+          mkdir -p bin
+          cp libredwg-0.13.3/programs/dwg2dxf bin/dwg2dxf
+          chmod +x bin/dwg2dxf
+
+      - name: Commit and push binary
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bin/dwg2dxf
+          git commit -m "Add pre-built dwg2dxf binary (libredwg 0.13.3, ubuntu-22.04)"
+          git push
