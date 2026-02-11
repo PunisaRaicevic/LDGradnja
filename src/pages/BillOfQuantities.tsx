@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useFinanceStore } from '@/store/useFinanceStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,11 +12,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Plus, Trash2, Upload, Download, FileSpreadsheet, Pencil,
-  Bot, CheckCircle, XCircle, AlertTriangle, FileText, Loader2,
+  Bot, CheckCircle, XCircle, AlertTriangle, FileText, Loader2, Info,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { analyzeExcelFile, convertAnalysisToBillItems, exportToExcel } from '@/lib/excel';
 import type { ExcelAnalysis } from '@/lib/excel';
+import { validateWithAI } from '@/lib/ai-validator';
+import type { ValidationIssue, ChunkProgress } from '@/types/validation';
 import { UNITS } from '@/types';
 import type { BillItem } from '@/types';
 import PredmjerValidator from '@/components/shared/PredmjerValidator';
@@ -69,9 +72,17 @@ export default function BillOfQuantities() {
   const [showSkipped, setShowSkipped] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
+  // AI validation state
+  const { openaiApiKey, loadSettings } = useSettingsStore();
+  const [aiValidating, setAiValidating] = useState(false);
+  const [aiIssues, setAiIssues] = useState<ValidationIssue[]>([]);
+  const [aiProgress, setAiProgress] = useState<ChunkProgress | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   useEffect(() => {
     if (projectId) loadBillItems(projectId);
-  }, [projectId, loadBillItems]);
+    loadSettings();
+  }, [projectId, loadBillItems, loadSettings]);
 
   const totalSum = billItems.reduce((sum, item) => sum + item.totalPrice, 0);
 
@@ -104,6 +115,42 @@ export default function BillOfQuantities() {
     setDialogOpen(false);
   };
 
+  const runAiValidation = async (analysisResult: ExcelAnalysis) => {
+    const apiKey = useSettingsStore.getState().openaiApiKey;
+    if (!apiKey) return;
+
+    const included = analysisResult.rows.filter((r) => r.included && r.parsed);
+    if (included.length === 0) return;
+
+    const fakeBillItems: BillItem[] = included.map((r, i) => ({
+      id: `preview-${i}`,
+      projectId: projectId || '',
+      ordinal: r.parsed!.ordinal,
+      description: r.parsed!.description,
+      unit: r.parsed!.unit,
+      quantity: r.parsed!.quantity,
+      unitPrice: r.parsed!.unitPrice,
+      totalPrice: r.parsed!.totalPrice,
+    }));
+
+    setAiValidating(true);
+    setAiIssues([]);
+    setAiError(null);
+    setAiProgress(null);
+
+    try {
+      const issues = await validateWithAI(fakeBillItems, {
+        apiKey,
+        onProgress: (progress) => setAiProgress(progress),
+      });
+      setAiIssues(issues);
+    } catch (err: any) {
+      setAiError(err.message || 'AI validacija nije uspjela');
+    } finally {
+      setAiValidating(false);
+    }
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -112,10 +159,15 @@ export default function BillOfQuantities() {
     setAnalyzing(true);
     setAnalysisOpen(true);
     setShowSkipped(false);
+    setAiIssues([]);
+    setAiError(null);
+    setAiValidating(false);
 
     try {
       const result = await analyzeExcelFile(file);
       setAnalysis(result);
+      // Start AI validation in background (non-blocking)
+      runAiValidation(result);
     } catch {
       alert('Greška pri čitanju fajla.');
       setAnalysisOpen(false);
@@ -144,6 +196,9 @@ export default function BillOfQuantities() {
     await setBillItems(items);
     setAnalysisOpen(false);
     setAnalysis(null);
+    setAiIssues([]);
+    setAiError(null);
+    setAiValidating(false);
   };
 
   const handleExport = () => {
@@ -296,9 +351,9 @@ export default function BillOfQuantities() {
       </Dialog>
 
       {/* AI Analysis Preview Dialog */}
-      <Dialog open={analysisOpen} onOpenChange={(open) => { if (!open) { setAnalysisOpen(false); setAnalysis(null); } }}>
+      <Dialog open={analysisOpen} onOpenChange={(open) => { if (!open) { setAnalysisOpen(false); setAnalysis(null); setAiIssues([]); setAiError(null); setAiValidating(false); } }}>
         <DialogContent
-          onClose={() => { setAnalysisOpen(false); setAnalysis(null); }}
+          onClose={() => { setAnalysisOpen(false); setAnalysis(null); setAiIssues([]); setAiError(null); setAiValidating(false); }}
           className="max-w-5xl max-h-[90vh] flex flex-col"
         >
           <DialogHeader>
@@ -347,6 +402,77 @@ export default function BillOfQuantities() {
                   <p className="text-2xl font-bold text-primary">{formatCurrency(includedTotal)}</p>
                   <p className="text-xs text-muted-foreground">Ukupna vrijednost</p>
                 </div>
+              </div>
+
+              {/* AI Semantic Analysis Section */}
+              <div className="border rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bot className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">AI Semantička analiza</span>
+                </div>
+                {!useSettingsStore.getState().openaiApiKey ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                    <span>
+                      Za automatsku AI analizu, podesite OpenAI API ključ u <strong>Troškovi &gt; Podešavanja</strong>.
+                    </span>
+                  </div>
+                ) : aiValidating ? (
+                  <div className="flex items-center gap-3 text-sm">
+                    <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
+                    <span className="text-muted-foreground">
+                      AI analizira stavke...
+                      {aiProgress && ` (${aiProgress.processedRows}/${aiProgress.totalRows} redova)`}
+                    </span>
+                  </div>
+                ) : aiError ? (
+                  <div className="flex items-center gap-2 text-sm text-red-600">
+                    <XCircle className="h-4 w-4 shrink-0" />
+                    <span>Greška: {aiError}</span>
+                  </div>
+                ) : aiIssues.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Pronađeno <strong>{aiIssues.length}</strong> potencijalnih problema:
+                    </p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {aiIssues.map((issue, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-start gap-2 text-sm p-2 rounded ${
+                            issue.severity === 'error'
+                              ? 'bg-red-50 text-red-800'
+                              : issue.severity === 'warning'
+                              ? 'bg-amber-50 text-amber-800'
+                              : 'bg-blue-50 text-blue-800'
+                          }`}
+                        >
+                          {issue.severity === 'error' ? (
+                            <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                          ) : issue.severity === 'warning' ? (
+                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                          ) : (
+                            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                          )}
+                          <div>
+                            <span className="font-medium">Red {issue.rowIndex + 1}:</span>{' '}
+                            {issue.message}
+                            {issue.suggestedValue && (
+                              <span className="text-xs ml-1 opacity-75">
+                                (predlog: {issue.suggestedValue})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm text-green-700">
+                    <CheckCircle className="h-4 w-4 shrink-0" />
+                    <span>AI nije pronašao probleme u stavkama.</span>
+                  </div>
+                )}
               </div>
 
               {/* Toggle skipped rows view */}
@@ -458,7 +584,7 @@ export default function BillOfQuantities() {
 
           {analysis && !analyzing && (
             <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => { setAnalysisOpen(false); setAnalysis(null); }}>
+              <Button variant="outline" onClick={() => { setAnalysisOpen(false); setAnalysis(null); setAiIssues([]); setAiError(null); setAiValidating(false); }}>
                 Otkaži
               </Button>
               <Button onClick={handleConfirmImport} disabled={includedRows.length === 0}>
