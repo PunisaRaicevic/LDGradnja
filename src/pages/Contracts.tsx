@@ -1,18 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useContractStore } from '@/store/useContractStore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { Plus, Search, Trash2, FileSignature, Download, Eye } from 'lucide-react';
+import { Plus, Search, Trash2, FileSignature, Download } from 'lucide-react';
 import { formatCurrency, formatDate, getToday } from '@/lib/utils';
+import { getStorageUrl } from '@/lib/supabase';
 import type { Contract } from '@/types';
 
 const emptyForm = {
@@ -51,14 +50,15 @@ export default function Contracts() {
     setFile(undefined);
   };
 
-  const handleDownload = (contract: Contract) => {
-    if (contract.fileData) {
-      const url = URL.createObjectURL(contract.fileData);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = contract.fileName || 'ugovor';
-      a.click();
-      URL.revokeObjectURL(url);
+  const handleDownload = async (contract: Contract) => {
+    if (contract.filePath) {
+      const url = await getStorageUrl('contracts', contract.filePath);
+      if (url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = contract.fileName || 'ugovor';
+        a.click();
+      }
     }
   };
 
@@ -100,7 +100,7 @@ export default function Contracts() {
                 <TableCell className="max-w-32 truncate">{contract.contactInfo || '-'}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
-                    {contract.fileData && (
+                    {contract.fileName && (
                       <Button variant="ghost" size="icon" onClick={() => handleDownload(contract)}>
                         <Download className="h-4 w-4" />
                       </Button>

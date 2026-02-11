@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTaskStore } from '@/store/useTaskStore';
+import { getStorageUrl } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Search, Trash2, Camera, Download, X } from 'lucide-react';
+import { Plus, Search, Trash2, Camera, Download } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 export default function PhotoGallery() {
@@ -17,10 +18,25 @@ export default function PhotoGallery() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [description, setDescription] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (projectId) loadPhotos(projectId);
   }, [projectId, loadPhotos]);
+
+  useEffect(() => {
+    const loadUrls = async () => {
+      const urls: Record<string, string> = {};
+      for (const photo of photos) {
+        if (photo.filePath && !photoUrls[photo.id]) {
+          const url = await getStorageUrl('photos', photo.filePath);
+          if (url) urls[photo.id] = url;
+        }
+      }
+      if (Object.keys(urls).length > 0) setPhotoUrls((prev) => ({ ...prev, ...urls }));
+    };
+    loadUrls();
+  }, [photos]);
 
   const filtered = photos.filter((p) =>
     (p.description || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -45,20 +61,17 @@ export default function PhotoGallery() {
   };
 
   const handlePreview = (photo: typeof photos[0]) => {
-    if (photo.fileData) {
-      const url = URL.createObjectURL(photo.fileData);
-      setPreviewUrl(url);
-    }
+    const url = photoUrls[photo.id];
+    if (url) setPreviewUrl(url);
   };
 
   const handleDownload = (photo: typeof photos[0]) => {
-    if (photo.fileData) {
-      const url = URL.createObjectURL(photo.fileData);
+    const url = photoUrls[photo.id];
+    if (url) {
       const a = document.createElement('a');
       a.href = url;
       a.download = photo.fileName;
       a.click();
-      URL.revokeObjectURL(url);
     }
   };
 
@@ -97,9 +110,9 @@ export default function PhotoGallery() {
                       className="aspect-square bg-muted flex items-center justify-center cursor-pointer relative"
                       onClick={() => handlePreview(photo)}
                     >
-                      {photo.fileData ? (
+                      {photoUrls[photo.id] ? (
                         <img
-                          src={URL.createObjectURL(photo.fileData)}
+                          src={photoUrls[photo.id]}
                           alt={photo.description || photo.fileName}
                           className="w-full h-full object-cover"
                         />
@@ -154,8 +167,8 @@ export default function PhotoGallery() {
       </Dialog>
 
       {/* Preview Dialog */}
-      <Dialog open={!!previewUrl} onOpenChange={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}>
-        <DialogContent onClose={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }} className="max-w-4xl">
+      <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
+        <DialogContent onClose={() => setPreviewUrl(null)} className="max-w-4xl">
           {previewUrl && <img src={previewUrl} alt="Preview" className="max-h-[80vh] object-contain mx-auto" />}
         </DialogContent>
       </Dialog>

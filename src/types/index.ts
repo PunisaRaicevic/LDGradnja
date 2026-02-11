@@ -15,12 +15,12 @@ export interface Drawing {
   projectId: string;
   name: string;
   fileName: string;
-  fileType: 'pdf' | 'dwg' | 'other';
+  fileType: 'pdf' | 'dwg' | 'dxf' | 'other';
   fileSize: number;
   version: number;
   uploadedAt: string;
   description?: string;
-  fileData?: Blob;
+  filePath?: string;
 }
 
 export interface BillItem {
@@ -82,7 +82,7 @@ export interface Expense {
   price: number;
   totalAmount: number;
   category: string;
-  receiptFileData?: Blob;
+  receiptFilePath?: string;
   receiptFileName?: string;
   createdAt: string;
 }
@@ -99,7 +99,7 @@ export interface Contract {
   contactInfo?: string;
   scopeOfWork?: string;
   paymentTerms?: string;
-  fileData?: Blob;
+  filePath?: string;
   fileName?: string;
   createdAt: string;
 }
@@ -122,7 +122,7 @@ export interface TaskAttachment {
   id: string;
   taskId: string;
   fileName: string;
-  fileData?: Blob;
+  filePath?: string;
   description?: string;
   uploadedAt: string;
 }
@@ -140,7 +140,7 @@ export interface MaterialRequest {
 export interface RequestPhoto {
   id: string;
   requestId: string;
-  fileData?: Blob;
+  filePath?: string;
   fileName: string;
   description?: string;
   uploadedAt: string;
@@ -174,7 +174,7 @@ export interface ProjectPhoto {
   id: string;
   projectId: string;
   fileName: string;
-  fileData?: Blob;
+  filePath?: string;
   description?: string;
   date: string;
   uploadedAt: string;

@@ -91,7 +91,7 @@ function classifyRow(
   rowIndex: number,
   headerRowIndex: number,
   columnMap: Record<string, number>,
-  totalRows: number,
+  _totalRows: number,
   hasDetails: boolean
 ): AnalyzedRow {
   const rawCells = row.map(c => String(c ?? '').trim());

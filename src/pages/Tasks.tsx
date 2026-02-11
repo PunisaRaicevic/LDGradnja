@@ -10,8 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Plus, Search, Trash2, CheckSquare, Clock, AlertTriangle, Camera, Upload } from 'lucide-react';
-import { formatDate, getToday } from '@/lib/utils';
+import { Plus, Search, Trash2, CheckSquare, Clock, AlertTriangle, Camera } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
 import type { Task, MaterialRequest } from '@/types';
 
 const priorityConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'warning' | 'destructive' }> = {

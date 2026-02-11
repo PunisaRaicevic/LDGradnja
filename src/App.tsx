@@ -1,5 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/useAuthStore';
 import { Layout } from '@/components/layout/Layout';
+import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import ProjectList from '@/pages/ProjectList';
 import ProjectDetail from '@/pages/ProjectDetail';
@@ -12,26 +15,50 @@ import Contracts from '@/pages/Contracts';
 import Tasks from '@/pages/Tasks';
 import MaterialOrders from '@/pages/MaterialOrders';
 import PhotoGallery from '@/pages/PhotoGallery';
+import { Loader2 } from 'lucide-react';
 
 function App() {
+  const { user, initialized, initialize } = useAuthStore();
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  if (!initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/projects" element={<ProjectList />} />
-          <Route path="/projects/:projectId" element={<ProjectDetail />}>
-            <Route path="drawings" element={<Drawings />} />
-            <Route path="bill" element={<BillOfQuantities />} />
-            <Route path="situations" element={<InterimSituations />} />
-            <Route path="diary" element={<ConstructionDiary />} />
-            <Route path="expenses" element={<Expenses />} />
-            <Route path="contracts" element={<Contracts />} />
-            <Route path="tasks" element={<Tasks />} />
-            <Route path="orders" element={<MaterialOrders />} />
-            <Route path="photos" element={<PhotoGallery />} />
+        {!user ? (
+          <>
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </>
+        ) : (
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/projects" element={<ProjectList />} />
+            <Route path="/projects/:projectId" element={<ProjectDetail />}>
+              <Route path="drawings" element={<Drawings />} />
+              <Route path="bill" element={<BillOfQuantities />} />
+              <Route path="situations" element={<InterimSituations />} />
+              <Route path="diary" element={<ConstructionDiary />} />
+              <Route path="expenses" element={<Expenses />} />
+              <Route path="contracts" element={<Contracts />} />
+              <Route path="tasks" element={<Tasks />} />
+              <Route path="orders" element={<MaterialOrders />} />
+              <Route path="photos" element={<PhotoGallery />} />
+            </Route>
+            <Route path="/login" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-        </Route>
+        )}
       </Routes>
     </BrowserRouter>
   );

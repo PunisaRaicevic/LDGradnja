@@ -16,6 +16,7 @@ import {
   CheckCircle, Camera, Settings, Sparkles, AlertCircle,
 } from 'lucide-react';
 import { formatCurrency, formatDate, getToday } from '@/lib/utils';
+import { getStorageUrl } from '@/lib/supabase';
 import { extractExpenseFromImage } from '@/lib/ai-extract';
 import type { ExtractedExpense } from '@/lib/ai-extract';
 import { EXPENSE_CATEGORIES } from '@/types';
@@ -84,10 +85,10 @@ export default function Expenses() {
     setReceiptFile(undefined);
   };
 
-  const handleReceiptPreview = (expense: Expense) => {
-    if (expense.receiptFileData) {
-      const url = URL.createObjectURL(expense.receiptFileData);
-      setPreviewUrl(url);
+  const handleReceiptPreview = async (expense: Expense) => {
+    if (expense.receiptFilePath) {
+      const url = await getStorageUrl('receipts', expense.receiptFilePath);
+      if (url) setPreviewUrl(url);
     }
   };
 
@@ -262,7 +263,7 @@ export default function Expenses() {
                   <TableCell className="text-right font-medium">{formatCurrency(expense.totalAmount)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      {expense.receiptFileData && (
+                      {expense.receiptFileName && (
                         <Button variant="ghost" size="icon" onClick={() => handleReceiptPreview(expense)}>
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -504,8 +505,8 @@ export default function Expenses() {
       </Dialog>
 
       {/* Receipt Preview Dialog */}
-      <Dialog open={!!previewUrl} onOpenChange={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }}>
-        <DialogContent onClose={() => { if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }} className="max-w-2xl">
+      <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
+        <DialogContent onClose={() => setPreviewUrl(null)} className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Pregled računa</DialogTitle>
           </DialogHeader>

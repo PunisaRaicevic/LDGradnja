@@ -13,9 +13,12 @@ import {
   Building2,
   ChevronLeft,
   Menu,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const mainNav = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -37,6 +40,7 @@ const projectNav = [
 export function Sidebar() {
   const { projectId } = useParams();
   const [collapsed, setCollapsed] = useState(false);
+  const { user, logout } = useAuthStore();
 
   return (
     <aside
@@ -112,6 +116,23 @@ export function Sidebar() {
           </>
         )}
       </nav>
+
+      {/* User & Logout */}
+      <div className="border-t border-white/10 p-3">
+        {!collapsed ? (
+          <div className="flex items-center gap-2 px-2 mb-2">
+            <User className="h-4 w-4 text-white/50 flex-shrink-0" />
+            <span className="text-xs text-white/50 truncate">{user?.email}</span>
+          </div>
+        ) : null}
+        <button
+          onClick={logout}
+          className="flex items-center gap-3 px-4 py-2 w-full rounded-md text-white/70 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+        >
+          <LogOut className="h-5 w-5 flex-shrink-0" />
+          {!collapsed && <span className="text-sm">Odjavi se</span>}
+        </button>
+      </div>
     </aside>
   );
 }

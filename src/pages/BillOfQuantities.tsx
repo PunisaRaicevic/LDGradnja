@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { analyzeExcelFile, convertAnalysisToBillItems, exportToExcel } from '@/lib/excel';
-import type { ExcelAnalysis, AnalyzedRow } from '@/lib/excel';
+import type { ExcelAnalysis } from '@/lib/excel';
 import { UNITS } from '@/types';
 import type { BillItem } from '@/types';
 

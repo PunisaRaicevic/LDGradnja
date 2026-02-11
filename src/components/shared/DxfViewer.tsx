@@ -51,7 +51,8 @@ export function DxfViewer({ blob, className }: DxfViewerProps) {
           }
         };
 
-        for (const entity of dxf.entities || []) {
+        for (const _entity of dxf.entities || []) {
+          const entity = _entity as any;
           if (entity.type === 'LINE') {
             expandBBox(entity.vertices[0].x, entity.vertices[0].y);
             expandBBox(entity.vertices[1].x, entity.vertices[1].y);
@@ -132,7 +133,8 @@ export function DxfViewer({ blob, className }: DxfViewerProps) {
     }
 
     // Draw entities
-    for (const entity of dxf.entities || []) {
+    for (const _entity of dxf.entities || []) {
+      const entity = _entity as any;
       ctx.strokeStyle = getColor(entity);
       ctx.fillStyle = getColor(entity);
       ctx.lineWidth = 1;
