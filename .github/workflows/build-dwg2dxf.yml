@@ -12,26 +12,22 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl xz-utils
+          sudo apt-get install -y build-essential autoconf automake libtool texinfo
 
-      - name: Download and extract libredwg 0.13.3
+      - name: Clone and build libredwg
         run: |
-          curl -L https://github.com/LibreDWG/libredwg/releases/download/0.13.3/libredwg-0.13.3.tar.xz | tar xJ
-          ls -la libredwg-0.13.3/
-
-      - name: Configure and build dwg2dxf
-        run: |
-          cd libredwg-0.13.3
-          ./configure --disable-shared --disable-write --disable-python
-          make -j$(nproc) programs/dwg2dxf
+          git clone --depth 1 --branch 0.13.3 https://github.com/LibreDWG/libredwg.git
+          cd libredwg
+          sh autogen.sh
+          ./configure
+          make -j$(nproc)
           ls -la programs/dwg2dxf
           file programs/dwg2dxf
-          ldd programs/dwg2dxf
 
       - name: Copy binary to repo
         run: |
           mkdir -p bin
-          cp libredwg-0.13.3/programs/dwg2dxf bin/dwg2dxf
+          cp libredwg/programs/dwg2dxf bin/dwg2dxf
           chmod +x bin/dwg2dxf
 
       - name: Commit and push binary
