@@ -136,13 +136,23 @@ export default function Users() {
 
   const handleAddToProject = async () => {
     if (!selectedUser || !assignProjectId) return;
+    // Check if already assigned (prevent duplicate)
+    if (projectMembers.some((pm) => pm.projectId === assignProjectId)) {
+      alert('Korisnik je već dodijeljen na ovaj projekat.');
+      return;
+    }
     try {
       await addProjectMember(assignProjectId, selectedUser.id, assignRole);
-      await loadUserProjectMembers(selectedUser.id);
-      setAssignProjectId('');
     } catch (err: any) {
-      alert('Greška: ' + (err.message || 'Korisnik je možda već dodijeljen na ovaj projekat.'));
+      if (err.message?.includes('duplicate') || err.message?.includes('unique')) {
+        // Already exists, just refresh the list
+      } else {
+        alert('Greška: ' + (err.message || 'Nije moguće dodati korisnika.'));
+        return;
+      }
     }
+    await loadUserProjectMembers(selectedUser.id);
+    setAssignProjectId('');
   };
 
   const handleRemoveFromProject = async (memberId: string) => {
