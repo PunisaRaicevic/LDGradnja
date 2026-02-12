@@ -196,6 +196,89 @@ function classifyRow(
   return { rowIndex, type: 'empty', reason: 'Prazan ili nevažeći red', rawCells, included: false };
 }
 
+/**
+ * Aggregate sub-rows into their parent data row.
+ * Pattern: a data row with quantity=0 followed by non-data rows that have
+ * numeric values (unit, quantity, price) but no ordinal number.
+ * Sub-row values are summed into the parent and sub-rows are marked as included=false.
+ */
+function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>): void {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.type !== 'data' || !row.parsed) continue;
+    if (row.parsed.quantity > 0 || row.parsed.unitPrice > 0) continue;
+
+    // This data row has 0 quantity/price - look for sub-rows below
+    const subRows: AnalyzedRow[] = [];
+    for (let j = i + 1; j < rows.length; j++) {
+      const next = rows[j];
+      if (next.type === 'empty') continue;
+      if (next.type === 'data' && next.parsed) break; // next real item
+      if (next.type === 'section' || next.type === 'footer') {
+        // Check if this "section" row actually has numeric data (it's a sub-item)
+        const hasNumerics = next.rawCells.some((c, ci) => {
+          if (ci === columnMap['ordinal']) return false;
+          const val = parseFloat(String(c).replace(',', '.'));
+          return !isNaN(val) && val > 0;
+        });
+        if (hasNumerics) {
+          subRows.push(next);
+        } else {
+          break; // real section header, stop
+        }
+      }
+    }
+
+    if (subRows.length === 0) continue;
+
+    // Aggregate sub-row values
+    let totalQuantity = 0;
+    let totalPrice = 0;
+    let unit = row.parsed.unit;
+    const subDescriptions: string[] = [];
+
+    for (const sub of subRows) {
+      const subUnit = columnMap['unit'] !== undefined ? sub.rawCells[columnMap['unit']] || '' : '';
+      const subQty = columnMap['quantity'] !== undefined
+        ? parseFloat(String(sub.rawCells[columnMap['quantity']]).replace(',', '.')) || 0
+        : 0;
+      const subUnitPrice = columnMap['unitPrice'] !== undefined
+        ? parseFloat(String(sub.rawCells[columnMap['unitPrice']]).replace(',', '.')) || 0
+        : 0;
+      let subTotal = columnMap['totalPrice'] !== undefined
+        ? parseFloat(String(sub.rawCells[columnMap['totalPrice']]).replace(',', '.')) || 0
+        : 0;
+      if (subTotal === 0 && subQty > 0 && subUnitPrice > 0) {
+        subTotal = subQty * subUnitPrice;
+      }
+
+      if (subUnit && !unit) unit = subUnit;
+      totalQuantity += subQty;
+      totalPrice += subTotal;
+
+      // Collect sub-item label for description
+      const subDesc = columnMap['description'] !== undefined ? sub.rawCells[columnMap['description']] || '' : '';
+      if (subDesc) subDescriptions.push(subDesc);
+
+      // Mark sub-row as consumed
+      sub.included = false;
+      sub.reason = `Pod-stavka agregirana u stavku ${row.parsed.ordinal}`;
+    }
+
+    // Update parent row
+    const avgUnitPrice = totalQuantity > 0 ? Math.round((totalPrice / totalQuantity) * 100) / 100 : 0;
+    row.parsed.unit = unit;
+    row.parsed.quantity = Math.round(totalQuantity * 100) / 100;
+    row.parsed.unitPrice = avgUnitPrice;
+    row.parsed.totalPrice = Math.round(totalPrice * 100) / 100;
+
+    if (subDescriptions.length > 0) {
+      row.parsed.description += ` (${subDescriptions.join(' + ')})`;
+    }
+    row.reason = `Stavka predmjera (${subRows.length} pod-stavki agregirano)`;
+  }
+}
+
 export function analyzeExcelFile(file: File): Promise<ExcelAnalysis> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -238,6 +321,10 @@ export function analyzeExcelFile(file: File): Promise<ExcelAnalysis> {
         const analyzedRows: AnalyzedRow[] = allRows.map((row, i) =>
           classifyRow(row, i, headerRowIndex, columnMap, allRows.length, hasDetails)
         );
+
+        // Post-processing: aggregate sub-rows into parent items
+        // Detects pattern: data row with quantity=0 followed by non-data rows with numeric values
+        aggregateSubRows(analyzedRows, columnMap);
 
         const dataRows = analyzedRows.filter(r => r.type === 'data');
         const skippedRows = analyzedRows.filter(r => r.type !== 'data' && r.type !== 'empty');
