@@ -15,6 +15,7 @@ import {
   Menu,
   LogOut,
   User,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -23,6 +24,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 const mainNav = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/projects', icon: FolderOpen, label: 'Projekti' },
+  { to: '/users', icon: Users, label: 'Korisnici' },
 ];
 
 const projectNav = [

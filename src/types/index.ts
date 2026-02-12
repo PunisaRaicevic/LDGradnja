@@ -227,3 +227,26 @@ export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
 export const UNITS: string[] = [
   'm', 'm²', 'm³', 'kg', 't', 'kom', 'sat', 'dan', 'komplet', 'pau'
 ];
+
+export interface AppUser {
+  id: string;
+  adminId: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  role: 'admin' | 'worker';
+  authUserId: string | null;
+  createdAt: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: 'admin' | 'worker';
+  addedAt: string;
+  // joined fields
+  userName?: string;
+  userEmail?: string;
+  projectName?: string;
+}

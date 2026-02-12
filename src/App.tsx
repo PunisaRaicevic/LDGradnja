@@ -15,6 +15,7 @@ import Contracts from '@/pages/Contracts';
 import Tasks from '@/pages/Tasks';
 import MaterialOrders from '@/pages/MaterialOrders';
 import PhotoGallery from '@/pages/PhotoGallery';
+import Users from '@/pages/Users';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
         ) : (
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/users" element={<Users />} />
             <Route path="/projects" element={<ProjectList />} />
             <Route path="/projects/:projectId" element={<ProjectDetail />}>
               <Route path="drawings" element={<Drawings />} />

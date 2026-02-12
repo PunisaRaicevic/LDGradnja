@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTaskStore } from '@/store/useTaskStore';
+import { useUserStore } from '@/store/useUserStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -265,6 +266,7 @@ export default function Tasks() {
     materialRequests, loadMaterialRequests, addMaterialRequest, updateMaterialRequestStatus,
     messages, loadMessages, sendMessage, deleteMessage,
   } = useTaskStore();
+  const { projectMembers, loadProjectMembers } = useUserStore();
 
   const [activeTab, setActiveTab] = useState('messages');
   const [search, setSearch] = useState('');
@@ -293,8 +295,9 @@ export default function Tasks() {
       loadTasks(projectId);
       loadMaterialRequests(projectId);
       loadMessages(projectId);
+      loadProjectMembers(projectId);
     }
-  }, [projectId, loadTasks, loadMaterialRequests, loadMessages]);
+  }, [projectId, loadTasks, loadMaterialRequests, loadMessages, loadProjectMembers]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -446,12 +449,27 @@ export default function Tasks() {
             {/* Input bar */}
             <div className="border-t p-3 space-y-2">
               {/* Sender name */}
-              <Input
-                placeholder="Vaše ime..."
-                value={msgSender}
-                onChange={(e) => setMsgSender(e.target.value)}
-                className="text-sm h-8"
-              />
+              {projectMembers.length > 0 ? (
+                <Select
+                  value={msgSender}
+                  onChange={(e) => setMsgSender(e.target.value)}
+                  className="text-sm h-8"
+                >
+                  <option value="">Izaberite ime...</option>
+                  {projectMembers.map((pm) => (
+                    <option key={pm.id} value={pm.userName || ''}>
+                      {pm.userName}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  placeholder="Vaše ime..."
+                  value={msgSender}
+                  onChange={(e) => setMsgSender(e.target.value)}
+                  className="text-sm h-8"
+                />
+              )}
 
               {/* Image preview */}
               {msgImage && (
@@ -667,7 +685,21 @@ export default function Tasks() {
             </div>
             <div>
               <Label>Dodijeljeno</Label>
-              <Input value={taskForm.assignedTo} onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })} placeholder="Ime saradnika" />
+              {projectMembers.length > 0 ? (
+                <Select
+                  value={taskForm.assignedTo}
+                  onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })}
+                >
+                  <option value="">Izaberite osobu...</option>
+                  {projectMembers.map((pm) => (
+                    <option key={pm.id} value={pm.userName || ''}>
+                      {pm.userName}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input value={taskForm.assignedTo} onChange={(e) => setTaskForm({ ...taskForm, assignedTo: e.target.value })} placeholder="Ime saradnika" />
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -686,7 +718,21 @@ export default function Tasks() {
           <div className="space-y-4">
             <div>
               <Label>Kreirao</Label>
-              <Input value={requestForm.createdBy} onChange={(e) => setRequestForm({ ...requestForm, createdBy: e.target.value })} placeholder="Ime saradnika" />
+              {projectMembers.length > 0 ? (
+                <Select
+                  value={requestForm.createdBy}
+                  onChange={(e) => setRequestForm({ ...requestForm, createdBy: e.target.value })}
+                >
+                  <option value="">Izaberite osobu...</option>
+                  {projectMembers.map((pm) => (
+                    <option key={pm.id} value={pm.userName || ''}>
+                      {pm.userName}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input value={requestForm.createdBy} onChange={(e) => setRequestForm({ ...requestForm, createdBy: e.target.value })} placeholder="Ime saradnika" />
+              )}
             </div>
             <div>
               <Label>Opis potreba *</Label>
