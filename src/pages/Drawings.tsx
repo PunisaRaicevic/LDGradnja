@@ -28,6 +28,8 @@ export default function Drawings() {
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [description, setDescription] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -50,13 +52,16 @@ export default function Drawings() {
     d.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleUpload = async (files: File[]) => {
-    if (!projectId) return;
-    for (const file of files) {
+  const handleConfirmUpload = async () => {
+    if (!projectId || pendingFiles.length === 0) return;
+    setUploading(true);
+    for (const file of pendingFiles) {
       await addDrawing(projectId, file, description);
     }
+    setUploading(false);
     setUploadOpen(false);
     setDescription('');
+    setPendingFiles([]);
   };
 
   const handlePreview = async (id: string) => {
@@ -190,20 +195,27 @@ export default function Drawings() {
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent onClose={() => setUploadOpen(false)}>
+      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!open) { setUploadOpen(false); setPendingFiles([]); setDescription(''); } }}>
+        <DialogContent onClose={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); }}>
           <DialogHeader>
             <DialogTitle>Upload crteza</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <Input placeholder="Opis (opciono)" value={description} onChange={(e) => setDescription(e.target.value)} />
             <FileUpload
-              onFilesSelected={handleUpload}
+              onFilesSelected={setPendingFiles}
               accept=".pdf,.dwg,.dxf"
               multiple
               label="Prevucite PDF, DWG ili DXF fajlove ovdje"
             />
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); }}>Otkazi</Button>
+            <Button onClick={handleConfirmUpload} disabled={pendingFiles.length === 0 || uploading}>
+              {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              {uploading ? 'Uploadujem...' : `Upload (${pendingFiles.length})`}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
