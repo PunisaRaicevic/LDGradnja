@@ -72,6 +72,13 @@ export interface DiaryEntry {
   createdAt: string;
 }
 
+export interface LineItem {
+  description: string;
+  quantity: number;
+  price: number;
+  total: number;
+}
+
 export interface Expense {
   id: string;
   projectId: string;
@@ -84,6 +91,13 @@ export interface Expense {
   category: string;
   receiptFilePath?: string;
   receiptFileName?: string;
+  invoiceNumber?: string;
+  dueDate?: string;
+  vendorTaxId?: string;
+  taxAmount?: number;
+  status: 'pending' | 'confirmed';
+  extractionConfidence?: Record<string, number>;
+  lineItems?: LineItem[];
   createdAt: string;
 }
 

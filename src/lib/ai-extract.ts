@@ -5,8 +5,12 @@ export interface ExtractedExpense {
   items: { description: string; quantity: number; price: number; total: number }[];
   totalAmount: number;
   category: string;
-  confidence: number;
+  confidence: Record<string, number>;
   rawText?: string;
+  invoiceNumber?: string;
+  dueDate?: string;
+  vendorTaxId?: string;
+  taxAmount?: number;
 }
 
 export async function extractExpenseFromImage(
@@ -35,21 +39,40 @@ Format odgovora:
   "date": "YYYY-MM-DD",
   "supplier": "naziv dobavljača/firme",
   "description": "kratki opis kupovine/usluge",
+  "invoiceNumber": "broj fakture/računa ako postoji",
+  "dueDate": "YYYY-MM-DD rok plaćanja ako postoji",
+  "vendorTaxId": "PIB/ID broj dobavljača ako postoji",
+  "taxAmount": 17.00,
   "items": [
     {"description": "opis stavke", "quantity": 1, "price": 10.00, "total": 10.00}
   ],
   "totalAmount": 100.00,
   "category": "jedna od: materijal, radna_snaga, oprema, transport, podizvođači, ostalo",
-  "confidence": 0.85,
+  "confidence": {
+    "date": 0.95,
+    "supplier": 0.90,
+    "description": 0.85,
+    "invoiceNumber": 0.80,
+    "dueDate": 0.70,
+    "vendorTaxId": 0.85,
+    "taxAmount": 0.90,
+    "items": 0.80,
+    "totalAmount": 0.95,
+    "category": 0.75
+  },
   "rawText": "prepoznati tekst sa slike"
 }
 
 Pravila:
 - Datum uvijek u formatu YYYY-MM-DD
 - Iznose zaokruži na 2 decimale
-- Ako ne možeš pročitati neko polje, stavi prazan string ili 0
+- Ako ne možeš pročitati neko polje, stavi prazan string ili 0, a confidence za to polje stavi na 0
 - Kategoriju odredi na osnovu sadržaja računa (građevinski materijal = "materijal", radnici = "radna_snaga", alati/mašine = "oprema", prevoz = "transport")
-- confidence je tvoja procjena koliko si siguran u ekstrakciju (0.0 - 1.0)
+- confidence je tvoja procjena pouzdanosti PO SVAKOM POLJU posebno (0.0 - 1.0)
+- taxAmount je iznos PDV-a (poreza) ako je vidljiv na računu
+- invoiceNumber je broj fakture/računa
+- vendorTaxId je PIB ili identifikacioni broj dobavljača
+- dueDate je rok plaćanja ako postoji
 - Sve tekstove piši na jeziku koji je na računu`
         },
         {
@@ -90,6 +113,37 @@ Pravila:
 
   try {
     const parsed = JSON.parse(jsonStr);
+
+    // Build per-field confidence from response or use defaults
+    const rawConfidence = parsed.confidence;
+    const defaultConf = typeof rawConfidence === 'number' ? rawConfidence : 0.5;
+    const confidence: Record<string, number> =
+      typeof rawConfidence === 'object' && rawConfidence !== null
+        ? {
+            date: parseFloat(rawConfidence.date) || defaultConf,
+            supplier: parseFloat(rawConfidence.supplier) || defaultConf,
+            description: parseFloat(rawConfidence.description) || defaultConf,
+            invoiceNumber: parseFloat(rawConfidence.invoiceNumber) || 0,
+            dueDate: parseFloat(rawConfidence.dueDate) || 0,
+            vendorTaxId: parseFloat(rawConfidence.vendorTaxId) || 0,
+            taxAmount: parseFloat(rawConfidence.taxAmount) || 0,
+            items: parseFloat(rawConfidence.items) || defaultConf,
+            totalAmount: parseFloat(rawConfidence.totalAmount) || defaultConf,
+            category: parseFloat(rawConfidence.category) || defaultConf,
+          }
+        : {
+            date: defaultConf,
+            supplier: defaultConf,
+            description: defaultConf,
+            invoiceNumber: 0,
+            dueDate: 0,
+            vendorTaxId: 0,
+            taxAmount: 0,
+            items: defaultConf,
+            totalAmount: defaultConf,
+            category: defaultConf,
+          };
+
     return {
       date: parsed.date || new Date().toISOString().split('T')[0],
       supplier: parsed.supplier || '',
@@ -97,8 +151,12 @@ Pravila:
       items: Array.isArray(parsed.items) ? parsed.items : [],
       totalAmount: parseFloat(parsed.totalAmount) || 0,
       category: parsed.category || 'ostalo',
-      confidence: parseFloat(parsed.confidence) || 0.5,
+      confidence,
       rawText: parsed.rawText || '',
+      invoiceNumber: parsed.invoiceNumber || '',
+      dueDate: parsed.dueDate || '',
+      vendorTaxId: parsed.vendorTaxId || '',
+      taxAmount: parseFloat(parsed.taxAmount) || 0,
     };
   } catch {
     throw new Error('AI nije mogao pravilno parsirati račun. Pokušajte sa jasnijom slikom.');

@@ -14,6 +14,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import {
   Plus, Search, Trash2, Receipt, Eye, Bot, Loader2,
   CheckCircle, Camera, Settings, Sparkles, AlertCircle,
+  FileSpreadsheet, FileText, Download,
 } from 'lucide-react';
 import { formatCurrency, formatDate, getToday } from '@/lib/utils';
 import { getStorageUrl } from '@/lib/supabase';
@@ -21,6 +22,9 @@ import { extractExpenseFromImage } from '@/lib/ai-extract';
 import type { ExtractedExpense } from '@/lib/ai-extract';
 import { EXPENSE_CATEGORIES } from '@/types';
 import type { Expense, ExpenseCategory } from '@/types';
+import ExpenseConfirmModal from '@/components/shared/ExpenseConfirmModal';
+import { exportExpensesExcel, exportExpensesPDF } from '@/lib/expense-report';
+import type { ReportFilters } from '@/lib/expense-report';
 
 const emptyForm = {
   date: getToday(),
@@ -34,7 +38,7 @@ const emptyForm = {
 
 export default function Expenses() {
   const { projectId } = useParams();
-  const { expenses, loadExpenses, addExpense, deleteExpense } = useExpenseStore();
+  const { expenses, loadExpenses, addExpense, deleteExpense, confirmExpense } = useExpenseStore();
   const { openaiApiKey, setOpenaiApiKey, loadSettings } = useSettingsStore();
 
   const [search, setSearch] = useState('');
@@ -52,9 +56,19 @@ export default function Expenses() {
   const [aiFile, setAiFile] = useState<File | null>(null);
   const [aiPreviewUrl, setAiPreviewUrl] = useState<string | null>(null);
 
+  // Confirmation modal
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingExtraction, setPendingExtraction] = useState<ExtractedExpense | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+
   // Settings
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
+
+  // Report dialog
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportFilters, setReportFilters] = useState<ReportFilters>({});
 
   useEffect(() => {
     if (projectId) loadExpenses(projectId);
@@ -79,7 +93,7 @@ export default function Expenses() {
   const handleSave = async () => {
     if (!projectId || !form.description) return;
     const totalAmount = form.quantity * form.price;
-    await addExpense({ ...form, projectId, totalAmount }, receiptFile);
+    await addExpense({ ...form, projectId, totalAmount, status: 'confirmed' }, receiptFile);
     setDialogOpen(false);
     setForm(emptyForm);
     setReceiptFile(undefined);
@@ -121,24 +135,55 @@ export default function Expenses() {
 
   const handleAiAccept = () => {
     if (!aiResult) return;
-    setForm({
-      date: aiResult.date || getToday(),
-      supplier: aiResult.supplier,
-      description: aiResult.description,
-      quantity: 1,
-      price: aiResult.totalAmount,
-      totalAmount: aiResult.totalAmount,
-      category: (aiResult.category as ExpenseCategory) || 'ostalo',
-    });
-    setReceiptFile(aiFile || undefined);
-    setAiScanOpen(false);
-    setDialogOpen(true);
 
-    // Cleanup
+    // Open confirmation modal instead of manual form
+    setPendingExtraction(aiResult);
+    setPendingFile(aiFile);
+    setPendingPreviewUrl(aiPreviewUrl);
+    setAiScanOpen(false);
+    setConfirmOpen(true);
+
+    // Reset AI scan state (but don't revoke preview URL - it's used by confirm modal)
     setAiResult(null);
     setAiFile(null);
-    if (aiPreviewUrl) URL.revokeObjectURL(aiPreviewUrl);
     setAiPreviewUrl(null);
+  };
+
+  const handleConfirmSave = async (data: ExtractedExpense) => {
+    if (!projectId) return;
+    await addExpense(
+      {
+        projectId,
+        date: data.date || getToday(),
+        supplier: data.supplier,
+        description: data.description,
+        quantity: 1,
+        price: data.totalAmount,
+        totalAmount: data.totalAmount,
+        category: (data.category as ExpenseCategory) || 'ostalo',
+        invoiceNumber: data.invoiceNumber || undefined,
+        dueDate: data.dueDate || undefined,
+        vendorTaxId: data.vendorTaxId || undefined,
+        taxAmount: data.taxAmount || 0,
+        status: 'confirmed',
+        extractionConfidence: data.confidence,
+        lineItems: data.items.length > 0 ? data.items : undefined,
+      },
+      pendingFile || undefined
+    );
+    setConfirmOpen(false);
+    setPendingExtraction(null);
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingPreviewUrl(null);
+    setPendingFile(null);
+  };
+
+  const handleConfirmCancel = () => {
+    setConfirmOpen(false);
+    setPendingExtraction(null);
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingPreviewUrl(null);
+    setPendingFile(null);
   };
 
   const openAiScan = () => {
@@ -162,10 +207,15 @@ export default function Expenses() {
     }
   };
 
-  const confidenceColor = (c: number) =>
-    c >= 0.8 ? 'text-green-600' : c >= 0.5 ? 'text-amber-500' : 'text-red-500';
-  const confidenceLabel = (c: number) =>
-    c >= 0.8 ? 'Visoka' : c >= 0.5 ? 'Srednja' : 'Niska';
+  const handleExportExcel = () => {
+    exportExpensesExcel(expenses, reportFilters);
+    setReportOpen(false);
+  };
+
+  const handleExportPDF = () => {
+    exportExpensesPDF(expenses, reportFilters);
+    setReportOpen(false);
+  };
 
   return (
     <div>
@@ -174,6 +224,10 @@ export default function Expenses() {
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={() => { setTempApiKey(openaiApiKey); setSettingsOpen(true); }}>
             <Settings className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={() => setReportOpen(true)}>
+            <Download className="h-4 w-4 mr-2" />
+            Izvještaj
           </Button>
           <Button variant="outline" onClick={openAiScan}>
             <Sparkles className="h-4 w-4 mr-2" />
@@ -237,12 +291,14 @@ export default function Expenses() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Status</TableHead>
                 <TableHead>Datum</TableHead>
                 <TableHead>Dobavljač</TableHead>
                 <TableHead>Opis</TableHead>
                 <TableHead>Kategorija</TableHead>
                 <TableHead className="text-right">Kol.</TableHead>
                 <TableHead className="text-right">Cijena</TableHead>
+                <TableHead className="text-right">PDV</TableHead>
                 <TableHead className="text-right">Ukupno</TableHead>
                 <TableHead className="text-right">Akcije</TableHead>
               </TableRow>
@@ -250,6 +306,11 @@ export default function Expenses() {
             <TableBody>
               {filtered.map((expense) => (
                 <TableRow key={expense.id}>
+                  <TableCell>
+                    <Badge variant={expense.status === 'confirmed' ? 'success' : 'warning'}>
+                      {expense.status === 'confirmed' ? 'Potvrđen' : 'Na čekanju'}
+                    </Badge>
+                  </TableCell>
                   <TableCell>{formatDate(expense.date)}</TableCell>
                   <TableCell>{expense.supplier}</TableCell>
                   <TableCell className="max-w-48 truncate">{expense.description}</TableCell>
@@ -260,12 +321,23 @@ export default function Expenses() {
                   </TableCell>
                   <TableCell className="text-right">{expense.quantity}</TableCell>
                   <TableCell className="text-right">{formatCurrency(expense.price)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(expense.taxAmount || 0)}</TableCell>
                   <TableCell className="text-right font-medium">{formatCurrency(expense.totalAmount)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       {expense.receiptFileName && (
                         <Button variant="ghost" size="icon" onClick={() => handleReceiptPreview(expense)}>
                           <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {expense.status === 'pending' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => confirmExpense(expense.id, {})}
+                          title="Potvrdi"
+                        >
+                          <CheckCircle className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
                       <Button variant="ghost" size="icon" onClick={() => deleteExpense(expense.id)}>
@@ -276,7 +348,7 @@ export default function Expenses() {
                 </TableRow>
               ))}
               <TableRow className="bg-muted/50 font-bold">
-                <TableCell colSpan={6} className="text-right">UKUPNO:</TableCell>
+                <TableCell colSpan={8} className="text-right">UKUPNO:</TableCell>
                 <TableCell className="text-right">{formatCurrency(totalExpenses)}</TableCell>
                 <TableCell />
               </TableRow>
@@ -426,53 +498,30 @@ export default function Expenses() {
 
               {aiResult && (
                 <div className="flex-1 overflow-y-auto space-y-3">
-                  {/* Confidence */}
+                  {/* Overall confidence */}
                   <div className="flex items-center justify-between bg-muted/50 rounded-lg p-3">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className={`h-5 w-5 ${confidenceColor(aiResult.confidence)}`} />
-                      <span className="text-sm font-medium">Pouzdanost:</span>
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                      <span className="text-sm font-medium">Ekstrakcija završena</span>
                     </div>
-                    <Badge variant={aiResult.confidence >= 0.8 ? 'success' : aiResult.confidence >= 0.5 ? 'warning' : 'destructive'}>
-                      {confidenceLabel(aiResult.confidence)} ({Math.round(aiResult.confidence * 100)}%)
-                    </Badge>
                   </div>
 
-                  {/* Extracted Fields */}
+                  {/* Quick preview of extracted fields */}
                   <div className="space-y-2">
                     <div className="border rounded-lg p-3">
                       <Label className="text-xs text-muted-foreground">Dobavljač</Label>
                       <p className="font-medium">{aiResult.supplier || '-'}</p>
                     </div>
+                    {aiResult.invoiceNumber && (
+                      <div className="border rounded-lg p-3">
+                        <Label className="text-xs text-muted-foreground">Broj fakture</Label>
+                        <p className="font-medium">{aiResult.invoiceNumber}</p>
+                      </div>
+                    )}
                     <div className="border rounded-lg p-3">
                       <Label className="text-xs text-muted-foreground">Datum</Label>
                       <p className="font-medium">{aiResult.date ? formatDate(aiResult.date) : '-'}</p>
                     </div>
-                    <div className="border rounded-lg p-3">
-                      <Label className="text-xs text-muted-foreground">Opis</Label>
-                      <p className="font-medium">{aiResult.description || '-'}</p>
-                    </div>
-                    <div className="border rounded-lg p-3">
-                      <Label className="text-xs text-muted-foreground">Kategorija</Label>
-                      <Badge variant="outline">
-                        {EXPENSE_CATEGORIES.find((c) => c.value === aiResult.category)?.label || aiResult.category}
-                      </Badge>
-                    </div>
-
-                    {/* Line Items */}
-                    {aiResult.items.length > 0 && (
-                      <div className="border rounded-lg p-3">
-                        <Label className="text-xs text-muted-foreground mb-2 block">Stavke</Label>
-                        <div className="space-y-1">
-                          {aiResult.items.map((item, i) => (
-                            <div key={i} className="flex justify-between text-sm">
-                              <span className="truncate flex-1">{item.description}</span>
-                              <span className="font-medium ml-2">{formatCurrency(item.total)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     <div className="border rounded-lg p-3 bg-primary/5">
                       <Label className="text-xs text-muted-foreground">Ukupan iznos</Label>
                       <p className="text-xl font-bold text-primary">{formatCurrency(aiResult.totalAmount)}</p>
@@ -497,12 +546,24 @@ export default function Expenses() {
               </Button>
               <Button onClick={handleAiAccept}>
                 <CheckCircle className="h-4 w-4 mr-2" />
-                Prihvati i pregledaj
+                Pregledaj i potvrdi
               </Button>
             </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Expense Confirmation Modal */}
+      {pendingExtraction && (
+        <ExpenseConfirmModal
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          extractedData={pendingExtraction}
+          previewUrl={pendingPreviewUrl}
+          onConfirm={handleConfirmSave}
+          onCancel={handleConfirmCancel}
+        />
+      )}
 
       {/* Receipt Preview Dialog */}
       <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
@@ -511,6 +572,64 @@ export default function Expenses() {
             <DialogTitle>Pregled računa</DialogTitle>
           </DialogHeader>
           {previewUrl && <img src={previewUrl} alt="Račun" className="max-h-[70vh] object-contain mx-auto" />}
+        </DialogContent>
+      </Dialog>
+
+      {/* Report Dialog */}
+      <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+        <DialogContent onClose={() => setReportOpen(false)} className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Izvoz izvještaja
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Datum od</Label>
+                <Input
+                  type="date"
+                  value={reportFilters.dateFrom || ''}
+                  onChange={(e) => setReportFilters({ ...reportFilters, dateFrom: e.target.value || undefined })}
+                />
+              </div>
+              <div>
+                <Label>Datum do</Label>
+                <Input
+                  type="date"
+                  value={reportFilters.dateTo || ''}
+                  onChange={(e) => setReportFilters({ ...reportFilters, dateTo: e.target.value || undefined })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Kategorija</Label>
+              <Select
+                value={reportFilters.category || ''}
+                onChange={(e) => setReportFilters({ ...reportFilters, category: e.target.value || undefined })}
+              >
+                <option value="">Sve kategorije</option>
+                {EXPENSE_CATEGORIES.map((cat) => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Izvoz će uključiti {expenses.length} troškova (bez filtera) ili filtrirane rezultate.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportOpen(false)}>Otkaži</Button>
+            <Button variant="outline" onClick={handleExportExcel}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel
+            </Button>
+            <Button onClick={handleExportPDF}>
+              <FileText className="h-4 w-4 mr-2" />
+              PDF
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

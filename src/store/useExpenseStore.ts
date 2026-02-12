@@ -10,6 +10,7 @@ interface ExpenseStore {
   addExpense: (data: Omit<Expense, 'id' | 'createdAt'>, receiptFile?: File) => Promise<void>;
   updateExpense: (id: string, data: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  confirmExpense: (id: string, data: Partial<Expense>) => Promise<void>;
 }
 
 function mapRow(r: any): Expense {
@@ -17,7 +18,15 @@ function mapRow(r: any): Expense {
     id: r.id, projectId: r.project_id, date: r.date, supplier: r.supplier || '',
     description: r.description || '', quantity: Number(r.quantity), price: Number(r.price),
     totalAmount: Number(r.total_amount), category: r.category || 'ostalo',
-    receiptFilePath: r.receipt_file_path, receiptFileName: r.receipt_file_name, createdAt: r.created_at,
+    receiptFilePath: r.receipt_file_path, receiptFileName: r.receipt_file_name,
+    invoiceNumber: r.invoice_number || undefined,
+    dueDate: r.due_date || undefined,
+    vendorTaxId: r.vendor_tax_id || undefined,
+    taxAmount: r.tax_amount != null ? Number(r.tax_amount) : undefined,
+    status: r.status || 'confirmed',
+    extractionConfidence: r.extraction_confidence || undefined,
+    lineItems: r.line_items || undefined,
+    createdAt: r.created_at,
   };
 }
 
@@ -54,6 +63,13 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
       description: data.description, quantity: data.quantity, price: data.price,
       total_amount: data.totalAmount, category: data.category,
       receipt_file_path: receiptFilePath, receipt_file_name: receiptFileName,
+      invoice_number: data.invoiceNumber || null,
+      due_date: data.dueDate || null,
+      vendor_tax_id: data.vendorTaxId || null,
+      tax_amount: data.taxAmount ?? 0,
+      status: data.status || 'confirmed',
+      extraction_confidence: data.extractionConfidence || null,
+      line_items: data.lineItems || null,
     }).select().single();
     if (row) set((s) => ({ expenses: [mapRow(row), ...s.expenses] }));
   },
@@ -67,8 +83,33 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
     if (data.price !== undefined) u.price = data.price;
     if (data.totalAmount !== undefined) u.total_amount = data.totalAmount;
     if (data.category !== undefined) u.category = data.category;
+    if (data.invoiceNumber !== undefined) u.invoice_number = data.invoiceNumber;
+    if (data.dueDate !== undefined) u.due_date = data.dueDate;
+    if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId;
+    if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
+    if (data.status !== undefined) u.status = data.status;
+    if (data.extractionConfidence !== undefined) u.extraction_confidence = data.extractionConfidence;
+    if (data.lineItems !== undefined) u.line_items = data.lineItems;
     await supabase.from('expenses').update(u).eq('id', id);
     set((s) => ({ expenses: s.expenses.map((e) => (e.id === id ? { ...e, ...data } : e)) }));
+  },
+
+  confirmExpense: async (id, data) => {
+    const u: Record<string, any> = { status: 'confirmed' };
+    if (data.date !== undefined) u.date = data.date;
+    if (data.supplier !== undefined) u.supplier = data.supplier;
+    if (data.description !== undefined) u.description = data.description;
+    if (data.quantity !== undefined) u.quantity = data.quantity;
+    if (data.price !== undefined) u.price = data.price;
+    if (data.totalAmount !== undefined) u.total_amount = data.totalAmount;
+    if (data.category !== undefined) u.category = data.category;
+    if (data.invoiceNumber !== undefined) u.invoice_number = data.invoiceNumber;
+    if (data.dueDate !== undefined) u.due_date = data.dueDate;
+    if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId;
+    if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
+    if (data.lineItems !== undefined) u.line_items = data.lineItems;
+    await supabase.from('expenses').update(u).eq('id', id);
+    set((s) => ({ expenses: s.expenses.map((e) => (e.id === id ? { ...e, ...data, status: 'confirmed' } : e)) }));
   },
 
   deleteExpense: async (id) => {
