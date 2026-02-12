@@ -130,10 +130,12 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
 
 @app.api_route("/api/openai/{path:path}", methods=["POST", "GET"])
 async def openai_proxy(path: str, request: Request):
-    """Proxy requests to OpenAI API, forwarding Authorization header."""
-    auth = request.headers.get("Authorization")
+    """Proxy requests to OpenAI API using server-side API key."""
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    # Fallback: allow client to pass key (for local dev without env var)
+    auth = f"Bearer {api_key}" if api_key else request.headers.get("Authorization", "")
     if not auth:
-        raise HTTPException(401, "Missing Authorization header")
+        raise HTTPException(401, "OpenAI API key not configured. Set OPENAI_API_KEY environment variable.")
 
     body = await request.body()
     headers = {

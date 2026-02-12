@@ -14,8 +14,7 @@ export interface ExtractedExpense {
 }
 
 export async function extractExpenseFromImage(
-  file: File,
-  apiKey: string
+  file: File
 ): Promise<ExtractedExpense> {
   const base64 = await fileToBase64(file);
   const mimeType = file.type || 'image/jpeg';
@@ -24,7 +23,6 @@ export async function extractExpenseFromImage(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',

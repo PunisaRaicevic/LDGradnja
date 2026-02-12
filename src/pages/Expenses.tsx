@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useExpenseStore } from '@/store/useExpenseStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Plus, Search, Trash2, Receipt, Eye, Bot, Loader2,
-  CheckCircle, Settings, Sparkles, AlertCircle,
+  CheckCircle, Sparkles, AlertCircle,
   FileSpreadsheet, FileText, Download, Upload, Bell, X,
   DollarSign, Clock, FileText as FileIcon,
 } from 'lucide-react';
@@ -46,7 +45,6 @@ const emptyForm = {
 export default function Expenses() {
   const { projectId } = useParams();
   const { expenses, loadExpenses, addExpense, deleteExpense, confirmExpense } = useExpenseStore();
-  const { openaiApiKey, setOpenaiApiKey, loadSettings } = useSettingsStore();
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -70,9 +68,6 @@ export default function Expenses() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
 
-  // Settings
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [tempApiKey, setTempApiKey] = useState('');
 
   // Report dialog
   const [reportOpen, setReportOpen] = useState(false);
@@ -80,8 +75,7 @@ export default function Expenses() {
 
   useEffect(() => {
     if (projectId) loadExpenses(projectId);
-    loadSettings();
-  }, [projectId, loadExpenses, loadSettings]);
+  }, [projectId, loadExpenses]);
 
   const filtered = expenses.filter((e) => {
     const matchSearch =
@@ -148,13 +142,13 @@ export default function Expenses() {
   };
 
   const handleAiScan = async () => {
-    if (!aiFile || !openaiApiKey) return;
+    if (!aiFile) return;
     setAiScanning(true);
     setAiError(null);
     setAiResult(null);
 
     try {
-      const result = await extractExpenseFromImage(aiFile, openaiApiKey);
+      const result = await extractExpenseFromImage(aiFile);
       setAiResult(result);
     } catch (err: any) {
       setAiError(err.message || 'Greška pri AI analizi.');
@@ -213,24 +207,12 @@ export default function Expenses() {
   };
 
   const openAiScan = () => {
-    if (!openaiApiKey) {
-      setSettingsOpen(true);
-      return;
-    }
     setAiFile(null);
     setAiResult(null);
     setAiError(null);
     if (aiPreviewUrl) URL.revokeObjectURL(aiPreviewUrl);
     setAiPreviewUrl(null);
     setAiScanOpen(true);
-  };
-
-  const handleSaveApiKey = () => {
-    setOpenaiApiKey(tempApiKey);
-    setSettingsOpen(false);
-    if (tempApiKey) {
-      setAiScanOpen(true);
-    }
   };
 
   const handleExportExcel = () => {
@@ -290,9 +272,6 @@ export default function Expenses() {
           <p className="text-sm text-muted-foreground">Pregled troškova i upravljanje fakturama</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => { setTempApiKey(openaiApiKey); setSettingsOpen(true); }}>
-            <Settings className="h-4 w-4" />
-          </Button>
           <Button variant="outline" onClick={() => setReportOpen(true)}>
             <Download className="h-4 w-4 mr-2" />
             Izvještaj
@@ -733,41 +712,6 @@ export default function Expenses() {
         </DialogContent>
       </Dialog>
 
-      {/* API Key Settings Dialog */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent onClose={() => setSettingsOpen(false)} className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              OpenAI Podešavanja
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>OpenAI API ključ</Label>
-              <Input
-                type="password"
-                value={tempApiKey}
-                onChange={(e) => setTempApiKey(e.target.value)}
-                placeholder="sk-..."
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Ključ se čuva lokalno u vašem browseru. Nabavite ga na platform.openai.com/api-keys
-              </p>
-            </div>
-            {openaiApiKey && (
-              <div className="flex items-center gap-2 text-sm text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                API ključ je konfigurisan
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSettingsOpen(false)}>Otkaži</Button>
-            <Button onClick={handleSaveApiKey} disabled={!tempApiKey}>Sačuvaj</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
