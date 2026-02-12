@@ -69,6 +69,10 @@ export default function Expenses() {
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
 
 
+  // Detail modal
+  const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
+  const [detailPreviewUrl, setDetailPreviewUrl] = useState<string | null>(null);
+
   // Report dialog
   const [reportOpen, setReportOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState<ReportFilters>({});
@@ -102,6 +106,16 @@ export default function Expenses() {
     if (expense.receiptFilePath) {
       const url = await getStorageUrl('receipts', expense.receiptFilePath);
       if (url) setPreviewUrl(url);
+    }
+  };
+
+  const handleRowClick = async (expense: Expense) => {
+    setDetailExpense(expense);
+    if (expense.receiptFilePath) {
+      const url = await getStorageUrl('receipts', expense.receiptFilePath);
+      setDetailPreviewUrl(url);
+    } else {
+      setDetailPreviewUrl(null);
     }
   };
 
@@ -388,7 +402,7 @@ export default function Expenses() {
               {filtered.map((expense) => {
                 const status = statusConfig[expense.status] || statusConfig.confirmed;
                 return (
-                  <TableRow key={expense.id} className={expense.status === 'pending' ? 'bg-amber-50/50' : ''}>
+                  <TableRow key={expense.id} className={`cursor-pointer hover:bg-muted/50 ${expense.status === 'pending' ? 'bg-amber-50/50' : ''}`} onClick={() => handleRowClick(expense)}>
                     <TableCell>
                       <Badge variant={status.variant}>
                         {status.label}
@@ -406,7 +420,7 @@ export default function Expenses() {
                     <TableCell className="text-right">{formatCurrency(expense.price)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(expense.taxAmount || 0)}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(expense.totalAmount)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-1">
                         {expense.receiptFileName && (
                           <Button variant="ghost" size="icon" onClick={() => handleReceiptPreview(expense)}>
@@ -716,6 +730,151 @@ export default function Expenses() {
               PDF
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Detail Modal */}
+      <Dialog open={!!detailExpense} onOpenChange={() => { setDetailExpense(null); setDetailPreviewUrl(null); }}>
+        <DialogContent onClose={() => { setDetailExpense(null); setDetailPreviewUrl(null); }} className="max-w-4xl max-h-[90vh] overflow-hidden p-0">
+          {detailExpense && (
+            <>
+              <div className="flex items-center justify-between p-6 border-b">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <FileIcon className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold">Detalji fakture</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {detailExpense.invoiceNumber || detailExpense.supplier}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant={statusConfig[detailExpense.status]?.variant || 'outline'}>
+                  {statusConfig[detailExpense.status]?.label || detailExpense.status}
+                </Badge>
+              </div>
+
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left: Receipt Preview */}
+                  <div>
+                    <h3 className="font-semibold mb-3">Dokument</h3>
+                    <div className="border rounded-xl overflow-hidden bg-muted/30">
+                      {detailPreviewUrl ? (
+                        detailPreviewUrl.toLowerCase().includes('.pdf') ? (
+                          <iframe src={detailPreviewUrl} className="w-full aspect-[3/4] rounded" title="Faktura PDF" />
+                        ) : (
+                          <img src={detailPreviewUrl} alt="Račun" className="w-full h-auto" />
+                        )
+                      ) : (
+                        <div className="aspect-[3/4] flex flex-col items-center justify-center">
+                          <Receipt className="w-12 h-12 text-muted-foreground mb-2" />
+                          <p className="text-muted-foreground text-sm">Nema priloženog dokumenta</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Expense Data */}
+                  <div className="space-y-4">
+                    {/* Osnovni podaci */}
+                    <div className="bg-muted/30 rounded-xl p-4 space-y-3 border">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <Clock size={16} className="text-primary" />
+                        Osnovni podaci
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Broj fakture</label>
+                          <p className="font-medium">{detailExpense.invoiceNumber || '-'}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Datum</label>
+                          <p className="font-medium">{detailExpense.date ? formatDate(detailExpense.date) : '-'}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Kategorija</label>
+                          <p className="font-medium">
+                            {EXPENSE_CATEGORIES.find((c) => c.value === detailExpense.category)?.label || detailExpense.category}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Rok plaćanja</label>
+                          <p className="font-medium">{detailExpense.dueDate ? formatDate(detailExpense.dueDate) : '-'}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Dobavljač */}
+                    <div className="bg-muted/30 rounded-xl p-4 space-y-3 border">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <DollarSign size={16} className="text-primary" />
+                        Dobavljač
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Naziv</label>
+                        <p className="font-medium">{detailExpense.supplier || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">PIB</label>
+                        <p className="font-medium">{detailExpense.vendorTaxId || '-'}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">Opis</label>
+                        <p className="text-sm text-muted-foreground">{detailExpense.description || '-'}</p>
+                      </div>
+                    </div>
+
+                    {/* Iznosi */}
+                    <div className="bg-muted/30 rounded-xl p-4 space-y-3 border">
+                      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                        <DollarSign size={16} className="text-primary" />
+                        Iznosi
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground">Cijena</label>
+                          <p className="font-medium">{formatCurrency(detailExpense.price)}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">PDV</label>
+                          <p className="font-medium">{formatCurrency(detailExpense.taxAmount || 0)}</p>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">Ukupno</label>
+                          <p className="text-lg font-bold text-primary">{formatCurrency(detailExpense.totalAmount)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stavke */}
+                    {detailExpense.lineItems && detailExpense.lineItems.length > 0 && (
+                      <div className="bg-muted/30 rounded-xl p-4 border">
+                        <p className="text-sm font-medium text-muted-foreground mb-2">
+                          Stavke ({detailExpense.lineItems.length})
+                        </p>
+                        <div className="space-y-1">
+                          {detailExpense.lineItems.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="text-muted-foreground truncate flex-1">
+                                {item.description || `Stavka ${idx + 1}`}
+                              </span>
+                              <span className="font-medium ml-2">
+                                {formatCurrency(item.total || 0)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
