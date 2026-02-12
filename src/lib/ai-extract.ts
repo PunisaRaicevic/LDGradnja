@@ -16,8 +16,17 @@ export interface ExtractedExpense {
 export async function extractExpenseFromImage(
   file: File
 ): Promise<ExtractedExpense> {
-  const base64 = await fileToBase64(file);
-  const mimeType = file.type || 'image/jpeg';
+  let base64: string;
+  let mimeType: string;
+
+  if (file.type === 'application/pdf') {
+    // Convert PDF first page to image
+    base64 = await pdfToBase64Image(file);
+    mimeType = 'image/png';
+  } else {
+    base64 = await fileToBase64(file);
+    mimeType = file.type || 'image/jpeg';
+  }
 
   const response = await fetch('/api/openai/v1/chat/completions', {
     method: 'POST',
@@ -173,4 +182,30 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+async function pdfToBase64Image(file: File): Promise<string> {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+
+  // Render at 2x scale for better OCR quality
+  const scale = 2;
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d')!;
+
+  await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
+  const dataUrl = canvas.toDataURL('image/png');
+  return dataUrl.split(',')[1];
 }
