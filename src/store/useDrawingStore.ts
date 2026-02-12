@@ -9,6 +9,7 @@ interface DrawingStore {
   addDrawing: (projectId: string, file: File, description?: string) => Promise<Drawing>;
   deleteDrawing: (id: string) => Promise<void>;
   getDrawingFile: (id: string) => Promise<Blob | undefined>;
+  getDrawingSignedUrl: (id: string) => Promise<string | null>;
 }
 
 function mapRow(r: any): Drawing {
@@ -74,5 +75,14 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
     if (!data) { console.error('[getDrawingFile] No data returned'); return undefined; }
     console.log('[getDrawingFile] Downloaded:', data.size, 'bytes');
     return data;
+  },
+
+  getDrawingSignedUrl: async (id) => {
+    const { data: row, error: rowErr } = await supabase.from('drawings').select('file_path').eq('id', id).single();
+    if (rowErr) { console.error('[getDrawingSignedUrl] DB error:', rowErr); return null; }
+    if (!row?.file_path) { console.error('[getDrawingSignedUrl] No file_path for id:', id); return null; }
+    const { data, error } = await supabase.storage.from('drawings').createSignedUrl(row.file_path, 3600);
+    if (error) { console.error('[getDrawingSignedUrl] Signed URL error:', error); return null; }
+    return data.signedUrl;
   },
 }));

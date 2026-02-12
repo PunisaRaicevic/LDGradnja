@@ -12,7 +12,7 @@ import { FileUpload } from '@/components/shared/FileUpload';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Download, Trash2, Eye, Search, FileText, Upload, FileBox,
-  Loader2, Settings, CheckCircle, RefreshCw,
+  Loader2, Settings, CheckCircle,
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '@/lib/utils';
 import type { Drawing } from '@/types';
@@ -23,7 +23,7 @@ const DxfViewer = lazy(() =>
 
 export default function Drawings() {
   const { projectId } = useParams();
-  const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile } = useDrawingStore();
+  const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile, getDrawingSignedUrl } = useDrawingStore();
   const { backendUrl, setBackendUrl, loadSettings } = useSettingsStore();
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -34,8 +34,9 @@ export default function Drawings() {
   const [previewDrawing, setPreviewDrawing] = useState<Drawing | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
-  const [converting, setConverting] = useState(false);
-  const [convertError, setConvertError] = useState<string | null>(null);
+  const [shareCADUrl, setShareCADUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Settings
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -59,83 +60,46 @@ export default function Drawings() {
     setDescription('');
   };
 
-  const convertDwgToDxf = async (blob: Blob): Promise<Blob> => {
-    if (!backendUrl) throw new Error('Backend URL nije konfigurisan');
-
-    const formData = new FormData();
-    formData.append('file', blob, 'input.dwg');
-
-    const res = await fetch(`${backendUrl}/convert/dwg-to-dxf`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-      throw new Error(err.detail || 'Konverzija nije uspjela');
-    }
-
-    return await res.blob();
-  };
-
   const handlePreview = async (id: string) => {
     const drawing = drawings.find((d) => d.id === id);
     if (!drawing) return;
     setPreviewDrawing(drawing);
-    setConvertError(null);
+    setPreviewError(null);
     setPreviewUrl(null);
     setPreviewBlob(null);
-    setConverting(true);
+    setShareCADUrl(null);
+    setPreviewLoading(true);
     setPreviewOpen(true);
 
-    const blob = await getDrawingFile(id);
-    if (!blob) {
-      setConverting(false);
-      setConvertError('Nije moguće preuzeti fajl');
-      return;
-    }
-
     if (drawing.fileType === 'pdf') {
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
-      setConverting(false);
-    } else if (drawing.fileType === 'dxf') {
-      setPreviewBlob(blob);
-      setConverting(false);
-    } else if (drawing.fileType === 'dwg') {
-      // Try backend conversion if configured
-      if (backendUrl) {
-        try {
-          const dxfBlob = await convertDwgToDxf(blob);
-          setPreviewBlob(dxfBlob);
-        } catch (e: any) {
-          setConvertError(e.message);
-          setPreviewBlob(null);
-        } finally {
-          setConverting(false);
-        }
-      } else {
-        setConverting(false);
+      const blob = await getDrawingFile(id);
+      if (!blob) {
+        setPreviewLoading(false);
+        setPreviewError('Nije moguće preuzeti fajl');
+        return;
       }
+      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewLoading(false);
+    } else if (drawing.fileType === 'dxf') {
+      const blob = await getDrawingFile(id);
+      if (!blob) {
+        setPreviewLoading(false);
+        setPreviewError('Nije moguće preuzeti fajl');
+        return;
+      }
+      setPreviewBlob(blob);
+      setPreviewLoading(false);
+    } else if (drawing.fileType === 'dwg') {
+      const signedUrl = await getDrawingSignedUrl(id);
+      if (!signedUrl) {
+        setPreviewLoading(false);
+        setPreviewError('Nije moguće generisati URL za pregled');
+        return;
+      }
+      setShareCADUrl(`https://sharecad.org/cadframe/load?url=${encodeURIComponent(signedUrl)}`);
+      setPreviewLoading(false);
     } else {
-      setConverting(false);
-    }
-  };
-
-  const handleRetryConvert = async () => {
-    if (!previewDrawing) return;
-    const blob = await getDrawingFile(previewDrawing.id);
-    if (!blob || !backendUrl) return;
-
-    setConverting(true);
-    setConvertError(null);
-    try {
-      const dxfBlob = await convertDwgToDxf(blob);
-      setPreviewBlob(dxfBlob);
-    } catch (e: any) {
-      setConvertError(e.message);
-    } finally {
-      setConverting(false);
+      setPreviewLoading(false);
     }
   };
 
@@ -143,9 +107,10 @@ export default function Drawings() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewBlob(null);
+    setShareCADUrl(null);
     setPreviewDrawing(null);
     setPreviewOpen(false);
-    setConvertError(null);
+    setPreviewError(null);
   };
 
   const handleDownload = async (id: string, fileName: string) => {
@@ -273,8 +238,8 @@ export default function Drawings() {
             <iframe src={previewUrl} className="w-full flex-1 min-h-[65vh] rounded border" title="PDF Preview" />
           )}
 
-          {/* DXF Preview (native or converted from DWG) */}
-          {previewBlob && !converting && (
+          {/* DXF Preview */}
+          {previewBlob && !previewLoading && (
             <Suspense
               fallback={
                 <div className="flex-1 min-h-[50vh] flex items-center justify-center">
@@ -286,50 +251,36 @@ export default function Drawings() {
             </Suspense>
           )}
 
-          {/* Converting spinner */}
-          {converting && (
+          {/* DWG Preview via ShareCAD */}
+          {shareCADUrl && !previewLoading && (
+            <iframe
+              src={shareCADUrl}
+              className="w-full flex-1 min-h-[65vh] rounded border"
+              title="DWG Preview (ShareCAD)"
+              sandbox="allow-scripts allow-same-origin allow-popups"
+            />
+          )}
+
+          {/* Loading spinner */}
+          {previewLoading && (
             <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center">
               <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
-              <p className="font-medium">Konvertujem DWG u DXF...</p>
-              <p className="text-sm text-muted-foreground mt-1">Ovo moze potrajati nekoliko sekundi</p>
+              <p className="font-medium">Ucitavam pregled...</p>
             </div>
           )}
 
-          {/* Convert error */}
-          {convertError && !converting && (
+          {/* Error */}
+          {previewError && !previewLoading && (
             <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center bg-muted/30 rounded-lg border border-dashed p-8">
               <FileBox className="h-12 w-12 text-destructive mb-4" />
-              <p className="font-medium text-destructive mb-2">Konverzija nije uspjela</p>
-              <p className="text-sm text-muted-foreground text-center mb-4">{convertError}</p>
-              <Button variant="outline" onClick={handleRetryConvert}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Pokusaj ponovo
-              </Button>
-            </div>
-          )}
-
-          {/* DWG without backend - show info */}
-          {previewDrawing?.fileType === 'dwg' && !backendUrl && !previewBlob && !converting && (
-            <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center bg-muted/30 rounded-lg border border-dashed p-8">
-              <FileBox className="h-16 w-16 text-orange-400 mb-4" />
-              <h3 className="text-lg font-semibold mb-2">{previewDrawing.name}</h3>
-              <div className="text-sm text-muted-foreground space-y-1 text-center mb-4">
-                <p>Velicina: {formatFileSize(previewDrawing.fileSize)}</p>
-                <p>Verzija: v{previewDrawing.version}</p>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
-                Za pregled DWG fajlova u browseru potreban je backend servis za konverziju.
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { setTempBackendUrl(backendUrl); setSettingsOpen(true); }}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Podesi backend
-                </Button>
+              <p className="font-medium text-destructive mb-2">Greska pri ucitavanju</p>
+              <p className="text-sm text-muted-foreground text-center mb-4">{previewError}</p>
+              {previewDrawing && (
                 <Button onClick={() => handleDownload(previewDrawing.id, previewDrawing.fileName)}>
                   <Download className="h-4 w-4 mr-2" />
                   Preuzmi
                 </Button>
-              </div>
+              )}
             </div>
           )}
 
