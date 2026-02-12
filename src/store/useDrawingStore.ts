@@ -85,7 +85,8 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
     // Use createSignedUrls (plural) - sends paths in JSON body, avoids URL encoding issues with special chars
     const { data, error } = await supabase.storage.from('drawings').createSignedUrls([row.file_path], 3600);
     if (error) { console.error('[getDrawingSignedUrl] Signed URL error:', error.message, error); return null; }
-    const signedUrl = data?.[0]?.signedUrl;
+    console.log('[getDrawingSignedUrl] Raw response item:', JSON.stringify(data?.[0]));
+    const signedUrl = data?.[0]?.signedUrl || data?.[0]?.signedURL;
     if (!signedUrl) { console.error('[getDrawingSignedUrl] No signedUrl in response:', data); return null; }
     console.log('[getDrawingSignedUrl] Success, URL length:', signedUrl.length);
     return signedUrl;
