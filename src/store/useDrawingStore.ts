@@ -65,9 +65,14 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
   },
 
   getDrawingFile: async (id) => {
-    const { data: row } = await supabase.from('drawings').select('file_path').eq('id', id).single();
-    if (!row?.file_path) return undefined;
-    const { data } = await supabase.storage.from('drawings').download(row.file_path);
-    return data ?? undefined;
+    const { data: row, error: rowErr } = await supabase.from('drawings').select('file_path').eq('id', id).single();
+    if (rowErr) { console.error('[getDrawingFile] DB error:', rowErr); return undefined; }
+    if (!row?.file_path) { console.error('[getDrawingFile] No file_path for id:', id); return undefined; }
+    console.log('[getDrawingFile] Downloading:', row.file_path);
+    const { data, error } = await supabase.storage.from('drawings').download(row.file_path);
+    if (error) { console.error('[getDrawingFile] Storage error:', error); return undefined; }
+    if (!data) { console.error('[getDrawingFile] No data returned'); return undefined; }
+    console.log('[getDrawingFile] Downloaded:', data.size, 'bytes');
+    return data;
   },
 }));
