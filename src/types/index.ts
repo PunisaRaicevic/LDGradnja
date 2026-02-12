@@ -160,6 +160,19 @@ export interface RequestPhoto {
   uploadedAt: string;
 }
 
+export interface Message {
+  id: string;
+  projectId: string;
+  senderName: string;
+  content: string;
+  imagePath?: string;
+  imageName?: string;
+  messageType: 'text' | 'image' | 'task_update' | 'request_update';
+  relatedTaskId?: string;
+  relatedRequestId?: string;
+  createdAt: string;
+}
+
 export interface PurchaseOrder {
   id: string;
   projectId: string;

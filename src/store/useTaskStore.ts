@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { Task, MaterialRequest, ProjectPhoto } from '@/types';
+import type { Task, MaterialRequest, ProjectPhoto, Message } from '@/types';
 import { supabase } from '@/lib/supabase';
 
 interface TaskStore {
   tasks: Task[];
   materialRequests: MaterialRequest[];
   photos: ProjectPhoto[];
+  messages: Message[];
   loading: boolean;
 
   loadTasks: (projectId: string) => Promise<void>;
@@ -16,6 +17,10 @@ interface TaskStore {
   loadMaterialRequests: (projectId: string) => Promise<void>;
   addMaterialRequest: (data: Omit<MaterialRequest, 'id' | 'createdAt' | 'photos'>, photoFiles?: File[]) => Promise<void>;
   updateMaterialRequestStatus: (id: string, status: MaterialRequest['status']) => Promise<void>;
+
+  loadMessages: (projectId: string) => Promise<void>;
+  sendMessage: (data: { projectId: string; senderName: string; content: string; messageType?: Message['messageType']; relatedTaskId?: string; relatedRequestId?: string }, imageFile?: File) => Promise<void>;
+  deleteMessage: (id: string) => Promise<void>;
 
   loadPhotos: (projectId: string) => Promise<void>;
   addPhoto: (projectId: string, file: File, description?: string) => Promise<void>;
@@ -35,6 +40,14 @@ function mapRequest(r: any, photos: any[]): MaterialRequest {
     status: r.status, createdBy: r.created_by || '', photos, createdAt: r.created_at,
   };
 }
+function mapMessage(r: any): Message {
+  return {
+    id: r.id, projectId: r.project_id, senderName: r.sender_name, content: r.content || '',
+    imagePath: r.image_path || undefined, imageName: r.image_name || undefined,
+    messageType: r.message_type || 'text', relatedTaskId: r.related_task_id || undefined,
+    relatedRequestId: r.related_request_id || undefined, createdAt: r.created_at,
+  };
+}
 function mapPhoto(r: any): ProjectPhoto {
   return {
     id: r.id, projectId: r.project_id, fileName: r.file_name, filePath: r.file_path,
@@ -43,7 +56,7 @@ function mapPhoto(r: any): ProjectPhoto {
 }
 
 export const useTaskStore = create<TaskStore>((set) => ({
-  tasks: [], materialRequests: [], photos: [], loading: false,
+  tasks: [], materialRequests: [], photos: [], messages: [], loading: false,
 
   loadTasks: async (projectId) => {
     set({ loading: true });
@@ -113,6 +126,45 @@ export const useTaskStore = create<TaskStore>((set) => ({
   updateMaterialRequestStatus: async (id, status) => {
     await supabase.from('material_requests').update({ status }).eq('id', id);
     set((s) => ({ materialRequests: s.materialRequests.map((r) => r.id === id ? { ...r, status } : r) }));
+  },
+
+  loadMessages: async (projectId) => {
+    const { data } = await supabase.from('messages').select('*').eq('project_id', projectId).order('created_at', { ascending: true });
+    set({ messages: (data || []).map(mapMessage) });
+  },
+
+  sendMessage: async (data, imageFile) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    let imagePath: string | undefined;
+    let imageName: string | undefined;
+
+    if (imageFile) {
+      imagePath = `${user.id}/${data.projectId}/${crypto.randomUUID()}_${imageFile.name}`;
+      imageName = imageFile.name;
+      await supabase.storage.from('photos').upload(imagePath, imageFile);
+    }
+
+    const { data: row } = await supabase.from('messages').insert({
+      project_id: data.projectId,
+      sender_name: data.senderName,
+      content: data.content,
+      image_path: imagePath || null,
+      image_name: imageName || null,
+      message_type: imageFile ? 'image' : (data.messageType || 'text'),
+      related_task_id: data.relatedTaskId || null,
+      related_request_id: data.relatedRequestId || null,
+    }).select().single();
+
+    if (row) set((s) => ({ messages: [...s.messages, mapMessage(row)] }));
+  },
+
+  deleteMessage: async (id) => {
+    const { data: row } = await supabase.from('messages').select('image_path').eq('id', id).single();
+    if (row?.image_path) await supabase.storage.from('photos').remove([row.image_path]);
+    await supabase.from('messages').delete().eq('id', id);
+    set((s) => ({ messages: s.messages.filter((m) => m.id !== id) }));
   },
 
   loadPhotos: async (projectId) => {
