@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir httpx==0.27.0
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static
+COPY bin/dwg2dxf /usr/local/bin/dwg2dxf
 
 EXPOSE 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
