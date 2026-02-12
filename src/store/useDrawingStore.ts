@@ -2,6 +2,37 @@ import { create } from 'zustand';
 import type { Drawing } from '@/types';
 import { supabase } from '@/lib/supabase';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+/** Sanitize filename: remove diacritics, replace spaces/special chars */
+function sanitizeFileName(name: string): string {
+  return name
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove diacritics (Ž→Z, etc.)
+    .replace(/[^a-zA-Z0-9._-]/g, '_') // replace anything non-ASCII with _
+    .replace(/_+/g, '_'); // collapse multiple underscores
+}
+
+/** Download file from Supabase storage using direct REST API with proper encoding */
+async function downloadFromStorage(filePath: string): Promise<Blob | undefined> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return undefined;
+
+  const encodedPath = filePath.split('/').map(s => encodeURIComponent(s)).join('/');
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/drawings/${encodedPath}`, {
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': SUPABASE_ANON_KEY,
+    },
+  });
+
+  if (!res.ok) {
+    console.error('[downloadFromStorage] HTTP', res.status, await res.text().catch(() => ''));
+    return undefined;
+  }
+  return await res.blob();
+}
+
 interface DrawingStore {
   drawings: Drawing[];
   loading: boolean;
@@ -38,7 +69,8 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
       : file.name.toLowerCase().endsWith('.dxf') ? 'dxf'
       : file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'other';
 
-    const filePath = `${user.id}/${projectId}/${crypto.randomUUID()}_${file.name}`;
+    const safeFileName = sanitizeFileName(file.name);
+    const filePath = `${user.id}/${projectId}/${crypto.randomUUID()}_${safeFileName}`;
     await supabase.storage.from('drawings').upload(filePath, file);
 
     // Check existing versions
@@ -69,10 +101,9 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
     if (rowErr) { console.error('[getDrawingFile] DB error:', rowErr); return undefined; }
     if (!row?.file_path) { console.error('[getDrawingFile] No file_path for id:', id); return undefined; }
     console.log('[getDrawingFile] Downloading:', row.file_path);
-    const { data, error } = await supabase.storage.from('drawings').download(row.file_path);
-    if (error) { console.error('[getDrawingFile] Storage error:', error); return undefined; }
-    if (!data) { console.error('[getDrawingFile] No data returned'); return undefined; }
-    console.log('[getDrawingFile] Downloaded:', data.size, 'bytes');
-    return data;
+    const blob = await downloadFromStorage(row.file_path);
+    if (!blob) { console.error('[getDrawingFile] Download failed'); return undefined; }
+    console.log('[getDrawingFile] Downloaded:', blob.size, 'bytes');
+    return blob;
   },
 }));
