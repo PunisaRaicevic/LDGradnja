@@ -197,27 +197,60 @@ function classifyRow(
 }
 
 /**
+ * Check if a raw ordinal string is a sub-item of a parent ordinal.
+ * Matches patterns like: "8.1", "8.2", "8a", "8b", "8-1", "8/1" for parent ordinal 8.
+ */
+function isSubOrdinal(rawOrdinal: string, parentOrdinal: number): boolean {
+  const s = String(rawOrdinal).trim();
+  if (!s) return false;
+  // "8.1", "8.2", "8,1" etc.
+  if (/^\d+[.,]\d+$/.test(s) && parseInt(s) === parentOrdinal) return true;
+  // "8a", "8b", "8A" etc.
+  if (/^\d+[a-zA-Z]$/.test(s) && parseInt(s) === parentOrdinal) return true;
+  // "8-1", "8/1" etc.
+  if (/^\d+[-/]\d+$/.test(s) && parseInt(s) === parentOrdinal) return true;
+  return false;
+}
+
+/**
  * Aggregate sub-rows into their parent data row.
- * Pattern: a data row with quantity=0 followed by non-data rows that have
- * numeric values (unit, quantity, price) but no ordinal number.
+ * Handles two patterns:
+ * 1. Data row with quantity=0 followed by non-data rows with numeric values
+ * 2. Data row followed by data rows with sub-ordinals (8.1, 8.2, 8a, 8b)
  * Sub-row values are summed into the parent and sub-rows are marked as included=false.
  */
 function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>): void {
+  const ordinalCol = columnMap['ordinal'];
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (row.type !== 'data' || !row.parsed) continue;
-    if (row.parsed.quantity > 0 || row.parsed.unitPrice > 0) continue;
 
-    // This data row has 0 quantity/price - look for sub-rows below
+    const parentOrdinal = row.parsed.ordinal;
+    const parentRawOrdinal = ordinalCol !== undefined ? row.rawCells[ordinalCol] : '';
+    // Parent must have a clean integer ordinal (not itself a sub-item)
+    if (String(parentRawOrdinal).trim() !== String(parentOrdinal)) continue;
+
+    // Collect sub-rows below this parent
     const subRows: AnalyzedRow[] = [];
     for (let j = i + 1; j < rows.length; j++) {
       const next = rows[j];
       if (next.type === 'empty') continue;
-      if (next.type === 'data' && next.parsed) break; // next real item
+
+      // Pattern 2: data rows with sub-ordinals (8.1, 8.2, etc.)
+      if (next.type === 'data' && next.parsed) {
+        const nextRawOrdinal = ordinalCol !== undefined ? next.rawCells[ordinalCol] : '';
+        if (isSubOrdinal(nextRawOrdinal, parentOrdinal)) {
+          subRows.push(next);
+          continue;
+        }
+        break; // next real item with different ordinal
+      }
+
+      // Pattern 1: section/footer rows with numeric data (no ordinal)
       if (next.type === 'section' || next.type === 'footer') {
-        // Check if this "section" row actually has numeric data (it's a sub-item)
         const hasNumerics = next.rawCells.some((c, ci) => {
-          if (ci === columnMap['ordinal']) return false;
+          if (ci === ordinalCol) return false;
           const val = parseFloat(String(c).replace(',', '.'));
           return !isNaN(val) && val > 0;
         });
@@ -231,6 +264,10 @@ function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>
 
     if (subRows.length === 0) continue;
 
+    // Only aggregate if parent has 0 values OR sub-rows have sub-ordinals
+    const hasSubOrdinals = subRows.some(s => s.type === 'data' && s.parsed);
+    if (!hasSubOrdinals && row.parsed.quantity > 0 && row.parsed.unitPrice > 0) continue;
+
     // Aggregate sub-row values
     let totalQuantity = 0;
     let totalPrice = 0;
@@ -238,31 +275,44 @@ function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>
     const subDescriptions: string[] = [];
 
     for (const sub of subRows) {
-      const subUnit = columnMap['unit'] !== undefined ? sub.rawCells[columnMap['unit']] || '' : '';
-      const subQty = columnMap['quantity'] !== undefined
-        ? parseFloat(String(sub.rawCells[columnMap['quantity']]).replace(',', '.')) || 0
-        : 0;
-      const subUnitPrice = columnMap['unitPrice'] !== undefined
-        ? parseFloat(String(sub.rawCells[columnMap['unitPrice']]).replace(',', '.')) || 0
-        : 0;
-      let subTotal = columnMap['totalPrice'] !== undefined
-        ? parseFloat(String(sub.rawCells[columnMap['totalPrice']]).replace(',', '.')) || 0
-        : 0;
-      if (subTotal === 0 && subQty > 0 && subUnitPrice > 0) {
-        subTotal = subQty * subUnitPrice;
+      let subUnit: string, subQty: number, subUnitPrice: number, subTotal: number;
+
+      if (sub.type === 'data' && sub.parsed) {
+        // Sub-ordinal data row - use parsed values
+        subUnit = sub.parsed.unit;
+        subQty = sub.parsed.quantity;
+        subUnitPrice = sub.parsed.unitPrice;
+        subTotal = sub.parsed.totalPrice;
+        subDescriptions.push(sub.parsed.description);
+      } else {
+        // Section/footer row - extract from raw cells
+        subUnit = columnMap['unit'] !== undefined ? sub.rawCells[columnMap['unit']] || '' : '';
+        subQty = columnMap['quantity'] !== undefined
+          ? parseFloat(String(sub.rawCells[columnMap['quantity']]).replace(',', '.')) || 0
+          : 0;
+        subUnitPrice = columnMap['unitPrice'] !== undefined
+          ? parseFloat(String(sub.rawCells[columnMap['unitPrice']]).replace(',', '.')) || 0
+          : 0;
+        subTotal = columnMap['totalPrice'] !== undefined
+          ? parseFloat(String(sub.rawCells[columnMap['totalPrice']]).replace(',', '.')) || 0
+          : 0;
+        if (subTotal === 0 && subQty > 0 && subUnitPrice > 0) {
+          subTotal = subQty * subUnitPrice;
+        }
+        const subDesc = columnMap['description'] !== undefined ? sub.rawCells[columnMap['description']] || '' : '';
+        if (subDesc) subDescriptions.push(subDesc);
       }
 
       if (subUnit && !unit) unit = subUnit;
       totalQuantity += subQty;
       totalPrice += subTotal;
 
-      // Collect sub-item label for description
-      const subDesc = columnMap['description'] !== undefined ? sub.rawCells[columnMap['description']] || '' : '';
-      if (subDesc) subDescriptions.push(subDesc);
-
       // Mark sub-row as consumed
       sub.included = false;
-      sub.reason = `Pod-stavka agregirana u stavku ${row.parsed.ordinal}`;
+      if (sub.type === 'data' && sub.parsed) {
+        sub.type = 'section'; // reclassify so it shows in skipped
+      }
+      sub.reason = `Pod-stavka agregirana u stavku ${parentOrdinal}`;
     }
 
     // Update parent row
