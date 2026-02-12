@@ -637,6 +637,7 @@ export default function Expenses() {
           onOpenChange={setConfirmOpen}
           extractedData={pendingExtraction}
           previewUrl={pendingPreviewUrl}
+          previewType={pendingFile?.type}
           onConfirm={handleConfirmSave}
           onCancel={handleConfirmCancel}
         />
@@ -644,11 +645,17 @@ export default function Expenses() {
 
       {/* Receipt Preview Dialog */}
       <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
-        <DialogContent onClose={() => setPreviewUrl(null)} className="max-w-2xl">
+        <DialogContent onClose={() => setPreviewUrl(null)} className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Pregled računa</DialogTitle>
           </DialogHeader>
-          {previewUrl && <img src={previewUrl} alt="Račun" className="max-h-[70vh] object-contain mx-auto" />}
+          {previewUrl && (
+            previewUrl.toLowerCase().includes('.pdf') ? (
+              <iframe src={previewUrl} className="w-full h-[75vh] rounded-lg border" title="Račun PDF" />
+            ) : (
+              <img src={previewUrl} alt="Račun" className="max-h-[75vh] object-contain mx-auto" />
+            )
+          )}
         </DialogContent>
       </Dialog>
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import {
-  X, CheckCircle, AlertTriangle, FileText,
+  X, CheckCircle, AlertTriangle,
   Edit2, Save, Building, Calendar, DollarSign,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -16,6 +16,7 @@ interface ExpenseConfirmModalProps {
   onOpenChange: (open: boolean) => void;
   extractedData: ExtractedExpense;
   previewUrl: string | null;
+  previewType?: string;
   onConfirm: (data: ExtractedExpense) => void;
   onCancel: () => void;
 }
@@ -40,6 +41,7 @@ export default function ExpenseConfirmModal({
   onOpenChange,
   extractedData,
   previewUrl,
+  previewType,
   onConfirm,
   onCancel,
 }: ExpenseConfirmModalProps) {
@@ -132,18 +134,8 @@ export default function ExpenseConfirmModal({
               <h3 className="font-semibold mb-3">Originalna faktura</h3>
               <div className="border rounded-xl overflow-hidden bg-muted/30">
                 {previewUrl ? (
-                  previewUrl.toLowerCase().endsWith('.pdf') ? (
-                    <div className="aspect-[3/4] flex flex-col items-center justify-center p-8">
-                      <FileText className="w-16 h-16 text-muted-foreground mb-4" />
-                      <a
-                        href={previewUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                      >
-                        Otvori PDF
-                      </a>
-                    </div>
+                  previewType === 'application/pdf' || previewUrl.toLowerCase().includes('.pdf') ? (
+                    <iframe src={previewUrl} className="w-full aspect-[3/4] rounded" title="Faktura PDF" />
                   ) : (
                     <img src={previewUrl} alt="Faktura" className="w-full h-auto" />
                   )
