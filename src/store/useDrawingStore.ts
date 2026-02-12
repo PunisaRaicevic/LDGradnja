@@ -81,8 +81,11 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
     const { data: row, error: rowErr } = await supabase.from('drawings').select('file_path').eq('id', id).single();
     if (rowErr) { console.error('[getDrawingSignedUrl] DB error:', rowErr); return null; }
     if (!row?.file_path) { console.error('[getDrawingSignedUrl] No file_path for id:', id); return null; }
+    console.log('[getDrawingSignedUrl] Creating signed URL for:', row.file_path);
     const { data, error } = await supabase.storage.from('drawings').createSignedUrl(row.file_path, 3600);
-    if (error) { console.error('[getDrawingSignedUrl] Signed URL error:', error); return null; }
+    if (error) { console.error('[getDrawingSignedUrl] Signed URL error:', error.message, error); return null; }
+    if (!data?.signedUrl) { console.error('[getDrawingSignedUrl] No signedUrl in response:', data); return null; }
+    console.log('[getDrawingSignedUrl] Success, URL length:', data.signedUrl.length);
     return data.signedUrl;
   },
 }));
