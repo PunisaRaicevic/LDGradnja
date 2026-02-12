@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUserStore } from '@/store/useUserStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Plus, Search, Trash2, UserPlus, Mail, Phone, Shield, X } from 'lucide-react';
-import type { AppUser, ProjectMember } from '@/types';
+import type { AppUser } from '@/types';
 
 const emptyForm = {
   fullName: '',
@@ -218,7 +218,9 @@ export default function Users() {
                     )}
                   </div>
                   {user.authUserId && (
-                    <Shield className="h-4 w-4 text-green-500 flex-shrink-0" title="Registrovan" />
+                    <span title="Registrovan">
+                      <Shield className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    </span>
                   )}
                 </div>
               </CardContent>
