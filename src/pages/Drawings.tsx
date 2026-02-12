@@ -23,7 +23,7 @@ const DxfViewer = lazy(() =>
 
 export default function Drawings() {
   const { projectId } = useParams();
-  const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile, getDrawingSignedUrl } = useDrawingStore();
+  const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile } = useDrawingStore();
   const { backendUrl, setBackendUrl, loadSettings } = useSettingsStore();
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -34,7 +34,6 @@ export default function Drawings() {
   const [previewDrawing, setPreviewDrawing] = useState<Drawing | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
-  const [shareCADUrl, setShareCADUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -63,51 +62,39 @@ export default function Drawings() {
   const handlePreview = async (id: string) => {
     const drawing = drawings.find((d) => d.id === id);
     if (!drawing) return;
+
+    // DWG: directly download so OS opens with default program
+    if (drawing.fileType === 'dwg') {
+      await handleDownload(id, drawing.fileName);
+      return;
+    }
+
     setPreviewDrawing(drawing);
     setPreviewError(null);
     setPreviewUrl(null);
     setPreviewBlob(null);
-    setShareCADUrl(null);
     setPreviewLoading(true);
     setPreviewOpen(true);
 
-    if (drawing.fileType === 'pdf') {
-      const blob = await getDrawingFile(id);
-      if (!blob) {
-        setPreviewLoading(false);
-        setPreviewError('Nije moguće preuzeti fajl');
-        return;
-      }
-      setPreviewUrl(URL.createObjectURL(blob));
+    const blob = await getDrawingFile(id);
+    if (!blob) {
       setPreviewLoading(false);
-    } else if (drawing.fileType === 'dxf') {
-      const blob = await getDrawingFile(id);
-      if (!blob) {
-        setPreviewLoading(false);
-        setPreviewError('Nije moguće preuzeti fajl');
-        return;
-      }
-      setPreviewBlob(blob);
-      setPreviewLoading(false);
-    } else if (drawing.fileType === 'dwg') {
-      const signedUrl = await getDrawingSignedUrl(id);
-      if (!signedUrl) {
-        setPreviewLoading(false);
-        setPreviewError('Nije moguće generisati URL za pregled');
-        return;
-      }
-      setShareCADUrl(`https://sharecad.org/cadframe/load?url=${encodeURIComponent(signedUrl)}`);
-      setPreviewLoading(false);
-    } else {
-      setPreviewLoading(false);
+      setPreviewError('Nije moguće preuzeti fajl');
+      return;
     }
+
+    if (drawing.fileType === 'pdf') {
+      setPreviewUrl(URL.createObjectURL(blob));
+    } else if (drawing.fileType === 'dxf') {
+      setPreviewBlob(blob);
+    }
+    setPreviewLoading(false);
   };
 
   const closePreview = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewBlob(null);
-    setShareCADUrl(null);
     setPreviewDrawing(null);
     setPreviewOpen(false);
     setPreviewError(null);
@@ -249,16 +236,6 @@ export default function Drawings() {
             >
               <DxfViewer blob={previewBlob} className="flex-1 min-h-[50vh]" />
             </Suspense>
-          )}
-
-          {/* DWG Preview via ShareCAD */}
-          {shareCADUrl && !previewLoading && (
-            <iframe
-              src={shareCADUrl}
-              className="w-full flex-1 min-h-[65vh] rounded border"
-              title="DWG Preview (ShareCAD)"
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
           )}
 
           {/* Loading spinner */}

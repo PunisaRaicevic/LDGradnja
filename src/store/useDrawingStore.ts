@@ -9,7 +9,6 @@ interface DrawingStore {
   addDrawing: (projectId: string, file: File, description?: string) => Promise<Drawing>;
   deleteDrawing: (id: string) => Promise<void>;
   getDrawingFile: (id: string) => Promise<Blob | undefined>;
-  getDrawingSignedUrl: (id: string) => Promise<string | null>;
 }
 
 function mapRow(r: any): Drawing {
@@ -75,39 +74,5 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
     if (!data) { console.error('[getDrawingFile] No data returned'); return undefined; }
     console.log('[getDrawingFile] Downloaded:', data.size, 'bytes');
     return data;
-  },
-
-  getDrawingSignedUrl: async (id) => {
-    const { data: row, error: rowErr } = await supabase.from('drawings').select('file_path').eq('id', id).single();
-    if (rowErr) { console.error('[getDrawingSignedUrl] DB error:', rowErr); return null; }
-    if (!row?.file_path) { console.error('[getDrawingSignedUrl] No file_path for id:', id); return null; }
-
-    // Direct REST API call with proper path encoding (SDK has issues with special chars like Ž, spaces)
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { console.error('[getDrawingSignedUrl] No session'); return null; }
-
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const encodedPath = row.file_path.split('/').map((s: string) => encodeURIComponent(s)).join('/');
-
-    const res = await fetch(`${supabaseUrl}/storage/v1/object/sign/drawings/${encodedPath}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ expiresIn: 3600 }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      console.error('[getDrawingSignedUrl] REST error:', err);
-      return null;
-    }
-
-    const result = await res.json();
-    if (!result.signedURL) { console.error('[getDrawingSignedUrl] No signedURL in response:', result); return null; }
-    // REST API returns relative path, prepend supabase URL
-    return `${supabaseUrl}/storage/v1${result.signedURL}`;
   },
 }));
