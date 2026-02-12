@@ -81,16 +81,33 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
     const { data: row, error: rowErr } = await supabase.from('drawings').select('file_path').eq('id', id).single();
     if (rowErr) { console.error('[getDrawingSignedUrl] DB error:', rowErr); return null; }
     if (!row?.file_path) { console.error('[getDrawingSignedUrl] No file_path for id:', id); return null; }
-    console.log('[getDrawingSignedUrl] Creating signed URL for:', row.file_path);
-    // Use createSignedUrls (plural) - sends paths in JSON body, avoids URL encoding issues with special chars
-    const { data, error } = await supabase.storage.from('drawings').createSignedUrls([row.file_path], 3600);
-    if (error) { console.error('[getDrawingSignedUrl] Signed URL error:', error.message, error); return null; }
-    const item = data?.[0];
-    console.log('[getDrawingSignedUrl] Raw response item:', JSON.stringify(item));
-    if (item?.error) { console.error('[getDrawingSignedUrl] Per-item error:', item.error); return null; }
-    const signedUrl = item?.signedUrl;
-    if (!signedUrl) { console.error('[getDrawingSignedUrl] No signedUrl in response:', data); return null; }
-    console.log('[getDrawingSignedUrl] Success, URL length:', signedUrl.length);
-    return signedUrl;
+
+    // Direct REST API call with proper path encoding (SDK has issues with special chars like Ž, spaces)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { console.error('[getDrawingSignedUrl] No session'); return null; }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const encodedPath = row.file_path.split('/').map((s: string) => encodeURIComponent(s)).join('/');
+
+    const res = await fetch(`${supabaseUrl}/storage/v1/object/sign/drawings/${encodedPath}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ expiresIn: 3600 }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      console.error('[getDrawingSignedUrl] REST error:', err);
+      return null;
+    }
+
+    const result = await res.json();
+    if (!result.signedURL) { console.error('[getDrawingSignedUrl] No signedURL in response:', result); return null; }
+    // REST API returns relative path, prepend supabase URL
+    return `${supabaseUrl}/storage/v1${result.signedURL}`;
   },
 }));
