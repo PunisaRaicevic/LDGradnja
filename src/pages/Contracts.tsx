@@ -192,23 +192,23 @@ export default function Contracts() {
 
       {/* Contract Detail Modal */}
       <Dialog open={!!detailContract} onOpenChange={() => { setDetailContract(null); setDetailPreviewUrl(null); }}>
-        <DialogContent onClose={() => { setDetailContract(null); setDetailPreviewUrl(null); }} className="max-w-4xl max-h-[90vh] overflow-hidden p-0">
+        <DialogContent onClose={() => { setDetailContract(null); setDetailPreviewUrl(null); }} className="w-full max-w-4xl max-h-[90vh] overflow-hidden p-0">
           {detailContract && (
             <>
-              <div className="flex items-center justify-between p-6 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <div className="flex items-center justify-between p-4 lg:p-6 border-b gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
                     <FileSignature className="w-5 h-5 text-primary" />
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Ugovor {detailContract.contractNumber}</h2>
-                    <p className="text-sm text-muted-foreground">{detailContract.partyName}</p>
+                  <div className="min-w-0">
+                    <h2 className="text-base lg:text-xl font-bold truncate">Ugovor {detailContract.contractNumber}</h2>
+                    <p className="text-xs lg:text-sm text-muted-foreground truncate">{detailContract.partyName}</p>
                   </div>
                 </div>
                 {detailContract.fileName && (
-                  <Button variant="outline" size="sm" onClick={() => handleDownload(detailContract)}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Preuzmi
+                  <Button variant="outline" size="sm" className="flex-shrink-0" onClick={() => handleDownload(detailContract)}>
+                    <Download className="h-4 w-4 mr-1 lg:mr-2" />
+                    <span className="hidden sm:inline">Preuzmi</span>
                   </Button>
                 )}
               </div>
@@ -221,7 +221,19 @@ export default function Contracts() {
                     <div className="border rounded-xl overflow-hidden bg-muted/30">
                       {detailPreviewUrl ? (
                         detailPreviewUrl.toLowerCase().includes('.pdf') ? (
-                          <iframe src={detailPreviewUrl} className="w-full aspect-[3/4] rounded" title="Ugovor PDF" />
+                          <div>
+                            {/* Desktop: iframe preview */}
+                            <iframe src={detailPreviewUrl} className="w-full aspect-[3/4] rounded hidden lg:block" title="Ugovor PDF" />
+                            {/* Mobile: open PDF button */}
+                            <div className="aspect-[3/4] flex flex-col items-center justify-center lg:hidden p-8">
+                              <FileText className="w-12 h-12 text-primary mb-3" />
+                              <p className="text-sm text-muted-foreground mb-3">PDF dokument</p>
+                              <Button onClick={() => window.open(detailPreviewUrl, '_blank')}>
+                                <Search className="h-4 w-4 mr-2" />
+                                Otvori PDF
+                              </Button>
+                            </div>
+                          </div>
                         ) : (
                           <div className="aspect-[3/4] flex flex-col items-center justify-center p-8">
                             <FileText className="w-16 h-16 text-muted-foreground mb-4" />
