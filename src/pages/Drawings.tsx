@@ -36,7 +36,6 @@ export default function Drawings() {
   const [previewDrawing, setPreviewDrawing] = useState<Drawing | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
-  const [shareCADUrl, setShareCADUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -73,19 +72,22 @@ export default function Drawings() {
     setPreviewError(null);
     setPreviewUrl(null);
     setPreviewBlob(null);
-    setShareCADUrl(null);
     setPreviewLoading(true);
     setPreviewOpen(true);
 
     if (drawing.fileType === 'dwg') {
+      // Open DWG directly via signed URL — OS will offer DWG FastView or other CAD viewer
       const signedUrl = await getDrawingSignedUrl(id);
       if (!signedUrl) {
         setPreviewLoading(false);
         setPreviewError('Nije moguće generisati URL za pregled');
         return;
       }
-      setShareCADUrl(`https://sharecad.org/cadframe/load?url=${encodeURIComponent(signedUrl)}`);
+      window.open(signedUrl, '_blank');
       setPreviewLoading(false);
+      setPreviewOpen(false);
+      setPreviewDrawing(null);
+      return;
     } else {
       const blob = await getDrawingFile(id);
       if (!blob) {
@@ -106,7 +108,6 @@ export default function Drawings() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setPreviewBlob(null);
-    setShareCADUrl(null);
     setPreviewDrawing(null);
     setPreviewOpen(false);
     setPreviewError(null);
@@ -242,16 +243,6 @@ export default function Drawings() {
           {/* PDF Preview */}
           {previewUrl && previewDrawing?.fileType === 'pdf' && (
             <iframe src={previewUrl} className="w-full flex-1 min-h-[65vh] rounded border" title="PDF Preview" />
-          )}
-
-          {/* DWG Preview via ShareCAD */}
-          {shareCADUrl && !previewLoading && (
-            <iframe
-              src={shareCADUrl}
-              className="w-full flex-1 min-h-[65vh] rounded border"
-              title="DWG Preview (ShareCAD)"
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
           )}
 
           {/* DXF Preview */}
