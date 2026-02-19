@@ -11,14 +11,18 @@ let package = Package(
             targets: ["CapApp-SPM"])
     ],
     dependencies: [
-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.1.0")
+        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.1.0"),
+        .package(name: "CapacitorCommunityFileOpener", path: "..\..\..\node_modules\@capacitor-community\file-opener"),
+        .package(name: "CapacitorFilesystem", path: "..\..\..\node_modules\@capacitor\filesystem")
     ],
     targets: [
         .target(
             name: "CapApp-SPM",
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                .product(name: "Cordova", package: "capacitor-swift-pm")
+                .product(name: "Cordova", package: "capacitor-swift-pm"),
+                .product(name: "CapacitorCommunityFileOpener", package: "CapacitorCommunityFileOpener"),
+                .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem")
             ]
         )
     ]

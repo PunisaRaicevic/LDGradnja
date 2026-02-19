@@ -1,5 +1,8 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileOpener } from '@capacitor-community/file-opener';
 import { useDrawingStore } from '@/store/useDrawingStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
 import { Card, CardContent } from '@/components/ui/card';
@@ -76,14 +79,50 @@ export default function Drawings() {
     setPreviewOpen(true);
 
     if (drawing.fileType === 'dwg') {
-      // Open DWG directly via signed URL — OS will offer DWG FastView or other CAD viewer
-      const signedUrl = await getDrawingSignedUrl(id);
-      if (!signedUrl) {
-        setPreviewLoading(false);
-        setPreviewError('Nije moguće generisati URL za pregled');
-        return;
+      // On native mobile: download to cache and open with FileOpener (DWG FastView etc.)
+      // On web: fallback to window.open with signed URL
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const blob = await getDrawingFile(id);
+          if (!blob) {
+            setPreviewLoading(false);
+            setPreviewError('Nije moguće preuzeti fajl');
+            return;
+          }
+          // Convert blob to base64
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              resolve(result.split(',')[1]);
+            };
+            reader.readAsDataURL(blob);
+          });
+          // Write to cache directory
+          const fileName = drawing.fileName || `${drawing.name}.dwg`;
+          const saved = await Filesystem.writeFile({
+            path: fileName,
+            data: base64,
+            directory: Directory.Cache,
+          });
+          // Open with system file opener — OS will offer DWG FastView
+          await FileOpener.open({
+            filePath: saved.uri,
+            contentType: 'application/acad',
+          });
+        } catch (e: any) {
+          console.error('[DWG open]', e);
+          setPreviewError(e.message || 'Greška pri otvaranju fajla');
+        }
+      } else {
+        const signedUrl = await getDrawingSignedUrl(id);
+        if (!signedUrl) {
+          setPreviewLoading(false);
+          setPreviewError('Nije moguće generisati URL za pregled');
+          return;
+        }
+        window.open(signedUrl, '_blank');
       }
-      window.open(signedUrl, '_blank');
       setPreviewLoading(false);
       setPreviewOpen(false);
       setPreviewDrawing(null);
