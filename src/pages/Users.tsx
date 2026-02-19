@@ -172,7 +172,7 @@ export default function Users() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl md:text-2xl font-bold">Korisnici</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Korisnici</h1>
         <Button onClick={() => { setForm(emptyForm); setFormError(''); setCreateDialogOpen(true); }}>
           <UserPlus className="h-4 w-4 mr-2" />Novi korisnik
         </Button>
@@ -200,7 +200,7 @@ export default function Users() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => (
             <Card
               key={user.id}

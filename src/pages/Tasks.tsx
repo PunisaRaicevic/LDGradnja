@@ -373,7 +373,7 @@ export default function Tasks() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h1 className="text-xl md:text-2xl font-bold">Zadaci i komunikacija</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Zadaci i komunikacija</h1>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">

@@ -14,11 +14,11 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const breadcrumbs = buildBreadcrumbs(pathParts, projects);
 
   return (
-    <header className="h-14 border-b bg-white flex items-center px-3 md:px-6 sticky top-0 z-10">
+    <header className="h-14 border-b bg-white flex items-center px-3 lg:px-6 sticky top-0 z-10">
       {/* Mobile hamburger */}
       <button
         onClick={onMobileMenuToggle}
-        className="p-2 -ml-1 mr-2 rounded-md hover:bg-muted md:hidden cursor-pointer"
+        className="p-2 -ml-1 mr-2 rounded-md hover:bg-muted lg:hidden cursor-pointer"
       >
         <Menu className="h-5 w-5" />
       </button>

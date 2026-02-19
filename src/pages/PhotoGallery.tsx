@@ -78,7 +78,7 @@ export default function PhotoGallery() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <h1 className="text-xl md:text-2xl font-bold">Fotografije</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Fotografije</h1>
         <Button onClick={() => setUploadOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Upload fotografija
@@ -103,7 +103,7 @@ export default function PhotoGallery() {
           .map(([date, datePhotos]) => (
             <div key={date} className="mb-6">
               <h3 className="text-lg font-semibold mb-3">{formatDate(date)}</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 lg:grid-cols-4 gap-4">
                 {datePhotos.map((photo) => (
                   <Card key={photo.id} className="overflow-hidden group">
                     <div

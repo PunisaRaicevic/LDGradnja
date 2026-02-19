@@ -33,8 +33,8 @@ export default function Dashboard() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
-          <p className="text-xs md:text-sm text-muted-foreground mt-1">Pregled svih projekata</p>
+          <h1 className="text-2xl lg:text-3xl font-bold">Dashboard</h1>
+          <p className="text-xs lg:text-sm text-muted-foreground mt-1">Pregled svih projekata</p>
         </div>
         <Link to="/projects">
           <Button>
@@ -44,7 +44,7 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Ukupno projekata</CardTitle>
@@ -85,7 +85,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeProjects.map((project) => (
             <Link key={project.id} to={`/projects/${project.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">

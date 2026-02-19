@@ -92,7 +92,7 @@ export default function ProjectList() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold">Projekti</h1>
+        <h1 className="text-2xl lg:text-3xl font-bold">Projekti</h1>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-2" />
           Novi projekat
@@ -116,7 +116,7 @@ export default function ProjectList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((project) => (
             <Card key={project.id} className="hover:shadow-md transition-shadow">
               <CardHeader>

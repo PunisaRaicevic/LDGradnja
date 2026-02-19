@@ -82,7 +82,7 @@ export default function ConstructionDiary() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <h1 className="text-xl md:text-2xl font-bold">Gradjevinska knjiga</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Gradjevinska knjiga</h1>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleExportPDF} disabled={diaryEntries.length === 0}>
             <FileDown className="h-4 w-4 mr-2" />
@@ -132,7 +132,7 @@ export default function ConstructionDiary() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="font-medium">Broj radnika:</span> {entry.workerCount}
                   </div>

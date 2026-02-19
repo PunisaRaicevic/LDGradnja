@@ -282,8 +282,8 @@ export default function Expenses() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold">Troškovnik i računi</h1>
-          <p className="text-xs md:text-sm text-muted-foreground">Pregled troškova i upravljanje fakturama</p>
+          <h1 className="text-xl lg:text-2xl font-bold">Troškovnik i računi</h1>
+          <p className="text-xs lg:text-sm text-muted-foreground">Pregled troškova i upravljanje fakturama</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setReportOpen(true)}>
@@ -302,7 +302,7 @@ export default function Expenses() {
       </div>
 
       {/* Statistics Cards - matching invoice-app dashboard pattern */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-blue-50/30">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
@@ -384,7 +384,7 @@ export default function Expenses() {
       ) : (
         <>
         {/* Desktop table */}
-        <Card className="hidden md:block">
+        <Card className="hidden lg:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -458,7 +458,7 @@ export default function Expenses() {
         </Card>
 
         {/* Mobile cards */}
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {filtered.map((expense) => {
             const status = statusConfig[expense.status] || statusConfig.confirmed;
             return (

@@ -56,7 +56,7 @@ export default function ProjectDetail() {
     <div>
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-2xl md:text-3xl font-bold">{project.name}</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold">{project.name}</h1>
           <Badge variant={statusVariant[project.status]}>{statusLabel[project.status]}</Badge>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -70,7 +70,7 @@ export default function ProjectDetail() {
       </div>
 
       <h2 className="text-xl font-semibold mb-4">Moduli</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
         {modules.map((mod) => (
           <Link key={mod.to} to={`/projects/${projectId}/${mod.to}`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

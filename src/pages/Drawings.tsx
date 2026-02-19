@@ -172,7 +172,7 @@ export default function Drawings() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <h1 className="text-xl md:text-2xl font-bold">Crtezi i planovi</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Crtezi i planovi</h1>
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={() => { setTempBackendUrl(backendUrl); setSettingsOpen(true); }}>
             <Settings className="h-4 w-4" />
@@ -199,7 +199,7 @@ export default function Drawings() {
       ) : (
         <>
         {/* Desktop table */}
-        <Card className="hidden md:block">
+        <Card className="hidden lg:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -243,7 +243,7 @@ export default function Drawings() {
         </Card>
 
         {/* Mobile cards */}
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {filtered.map((drawing) => (
             <Card key={drawing.id}>
               <CardContent className="p-4">

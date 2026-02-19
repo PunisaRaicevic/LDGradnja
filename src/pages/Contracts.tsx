@@ -90,7 +90,7 @@ export default function Contracts() {
     ) : (
       <>
         {/* Desktop table */}
-        <Card className="hidden md:block">
+        <Card className="hidden lg:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -131,7 +131,7 @@ export default function Contracts() {
         </Card>
 
         {/* Mobile cards */}
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {items.map((contract) => (
             <Card key={contract.id} className="cursor-pointer" onClick={() => handleRowClick(contract)}>
               <CardContent className="p-4">
@@ -167,7 +167,7 @@ export default function Contracts() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <h1 className="text-xl md:text-2xl font-bold">Ugovori i dokumentacija</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Ugovori i dokumentacija</h1>
       </div>
 
       <div className="relative mb-4">

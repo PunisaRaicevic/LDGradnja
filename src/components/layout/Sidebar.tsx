@@ -60,8 +60,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       className={cn(
         'h-screen bg-foreground text-white flex flex-col transition-all duration-300',
         // Desktop: static sidebar
-        'hidden md:flex md:sticky md:top-0',
-        collapsed ? 'md:w-16' : 'md:w-64',
+        'hidden lg:flex lg:sticky lg:top-0',
+        collapsed ? 'lg:w-16' : 'lg:w-64',
         // Mobile: overlay drawer
         mobileOpen && 'fixed inset-y-0 left-0 z-50 flex w-64'
       )}
@@ -76,14 +76,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         {/* Desktop: collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1 rounded hover:bg-white/10 cursor-pointer hidden md:block"
+          className="p-1 rounded hover:bg-white/10 cursor-pointer hidden lg:block"
         >
           {collapsed ? <Menu className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
         </button>
         {/* Mobile: close button */}
         <button
           onClick={onMobileClose}
-          className="p-1 rounded hover:bg-white/10 cursor-pointer md:hidden"
+          className="p-1 rounded hover:bg-white/10 cursor-pointer lg:hidden"
         >
           <X className="h-5 w-5" />
         </button>

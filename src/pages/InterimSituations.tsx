@@ -95,7 +95,7 @@ export default function InterimSituations() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-        <h1 className="text-xl md:text-2xl font-bold">Privremene situacije</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Privremene situacije</h1>
         <Button onClick={openCreate} disabled={billItems.length === 0}>
           <Plus className="h-4 w-4 mr-2" />
           Nova situacija
@@ -138,7 +138,7 @@ export default function InterimSituations() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground">Datum:</span>
                     <p className="font-medium">{formatDate(situation.date)}</p>
