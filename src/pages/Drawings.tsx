@@ -132,8 +132,8 @@ export default function Drawings() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Crtezi i planovi</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Crtezi i planovi</h1>
         <div className="flex gap-2">
           <Button variant="outline" size="icon" onClick={() => { setTempBackendUrl(backendUrl); setSettingsOpen(true); }}>
             <Settings className="h-4 w-4" />
@@ -158,7 +158,9 @@ export default function Drawings() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+        {/* Desktop table */}
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -200,6 +202,39 @@ export default function Drawings() {
             </TableBody>
           </Table>
         </Card>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 md:hidden">
+          {filtered.map((drawing) => (
+            <Card key={drawing.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="font-medium text-sm leading-tight">{drawing.name}</h3>
+                  <Badge variant={drawing.fileType === 'dwg' ? 'secondary' : drawing.fileType === 'dxf' ? 'outline' : 'default'}>
+                    {drawing.fileType.toUpperCase()}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                  <span>{formatFileSize(drawing.fileSize)}</span>
+                  <span>v{drawing.version}</span>
+                  <span>{formatDate(drawing.uploadedAt)}</span>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" onClick={() => handlePreview(drawing.id)}>
+                    <Eye className="h-3.5 w-3.5 mr-1" /> Pregled
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDownload(drawing.id, drawing.fileName)}>
+                    <Download className="h-3.5 w-3.5 mr-1" /> Preuzmi
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => deleteDrawing(drawing.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        </>
       )}
 
       {/* Upload Dialog */}

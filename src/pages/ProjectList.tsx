@@ -91,8 +91,8 @@ export default function ProjectList() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Projekti</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-2xl md:text-3xl font-bold">Projekti</h1>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4 mr-2" />
           Novi projekat

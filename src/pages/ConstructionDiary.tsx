@@ -81,9 +81,9 @@ export default function ConstructionDiary() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Gradjevinska knjiga</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Gradjevinska knjiga</h1>
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={handleExportPDF} disabled={diaryEntries.length === 0}>
             <FileDown className="h-4 w-4 mr-2" />
             Export PDF

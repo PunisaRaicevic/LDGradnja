@@ -372,12 +372,12 @@ export default function Tasks() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Zadaci i komunikacija</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h1 className="text-xl md:text-2xl font-bold">Zadaci i komunikacija</h1>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <TabsList>
             <TabsTrigger value="messages">
               <MessageCircle className="h-4 w-4 mr-1" />

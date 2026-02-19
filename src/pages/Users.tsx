@@ -171,8 +171,8 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Korisnici</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl md:text-2xl font-bold">Korisnici</h1>
         <Button onClick={() => { setForm(emptyForm); setFormError(''); setCreateDialogOpen(true); }}>
           <UserPlus className="h-4 w-4 mr-2" />Novi korisnik
         </Button>

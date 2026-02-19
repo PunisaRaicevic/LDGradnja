@@ -31,10 +31,10 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Pregled svih projekata</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+          <p className="text-xs md:text-sm text-muted-foreground mt-1">Pregled svih projekata</p>
         </div>
         <Link to="/projects">
           <Button>

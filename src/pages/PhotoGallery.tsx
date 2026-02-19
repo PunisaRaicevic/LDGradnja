@@ -77,8 +77,8 @@ export default function PhotoGallery() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Fotografije</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Fotografije</h1>
         <Button onClick={() => setUploadOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Upload fotografija

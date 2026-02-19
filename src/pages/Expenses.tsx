@@ -280,12 +280,12 @@ export default function Expenses() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Troškovnik i računi</h1>
-          <p className="text-sm text-muted-foreground">Pregled troškova i upravljanje fakturama</p>
+          <h1 className="text-xl md:text-2xl font-bold">Troškovnik i računi</h1>
+          <p className="text-xs md:text-sm text-muted-foreground">Pregled troškova i upravljanje fakturama</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setReportOpen(true)}>
             <Download className="h-4 w-4 mr-2" />
             Izvještaj
@@ -358,12 +358,12 @@ export default function Expenses() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-4">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Pretraži po dobavljaču ili opisu..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
-        <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="w-48">
+        <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="sm:w-48">
           <option value="">Sve kategorije</option>
           {EXPENSE_CATEGORIES.map((cat) => (
             <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -382,7 +382,9 @@ export default function Expenses() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+        {/* Desktop table */}
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -454,6 +456,61 @@ export default function Expenses() {
             </TableBody>
           </Table>
         </Card>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 md:hidden">
+          {filtered.map((expense) => {
+            const status = statusConfig[expense.status] || statusConfig.confirmed;
+            return (
+              <Card key={expense.id} className={`cursor-pointer ${expense.status === 'pending' ? 'border-amber-200 bg-amber-50/30' : ''}`} onClick={() => handleRowClick(expense)}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="min-w-0">
+                      <h3 className="font-medium text-sm truncate">{expense.supplier}</h3>
+                      <p className="text-xs text-muted-foreground truncate">{expense.description}</p>
+                    </div>
+                    <Badge variant={status.variant} className="flex-shrink-0">{status.label}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                    <span>{formatDate(expense.date)}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {EXPENSE_CATEGORIES.find((c) => c.value === expense.category)?.label}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-3 text-xs">
+                      <span>Kol: {expense.quantity}</span>
+                      <span>PDV: {formatCurrency(expense.taxAmount || 0)}</span>
+                    </div>
+                    <span className="font-bold text-sm">{formatCurrency(expense.totalAmount)}</span>
+                  </div>
+                  <div className="flex gap-1 mt-2 border-t pt-2" onClick={(e) => e.stopPropagation()}>
+                    {expense.receiptFileName && (
+                      <Button variant="ghost" size="sm" onClick={() => handleReceiptPreview(expense)}>
+                        <Eye className="h-3.5 w-3.5 mr-1" /> Račun
+                      </Button>
+                    )}
+                    {expense.status === 'pending' && (
+                      <Button variant="ghost" size="sm" onClick={() => confirmExpense(expense.id, {})}>
+                        <CheckCircle className="h-3.5 w-3.5 mr-1 text-green-600" /> Potvrdi
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => deleteExpense(expense.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+          <Card className="bg-muted/50">
+            <CardContent className="p-4 flex justify-between items-center">
+              <span className="font-bold text-sm">UKUPNO:</span>
+              <span className="font-bold">{formatCurrency(totalExpenses)}</span>
+            </CardContent>
+          </Card>
+        </div>
+        </>
       )}
 
       {/* Manual Add Expense Dialog */}

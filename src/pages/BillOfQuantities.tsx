@@ -220,9 +220,9 @@ export default function BillOfQuantities() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Predmjer radova</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Predmjer radova</h1>
+        <div className="flex flex-wrap gap-2">
           <input id="excel-import" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect} />
           <Button variant="outline" onClick={() => document.getElementById('excel-import')?.click()}>
             <Upload className="h-4 w-4 mr-2" />
@@ -262,7 +262,9 @@ export default function BillOfQuantities() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+        {/* Desktop table */}
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -304,6 +306,42 @@ export default function BillOfQuantities() {
             </TableBody>
           </Table>
         </Card>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 md:hidden">
+          {billItems.map((item) => (
+            <Card key={item.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="text-xs text-muted-foreground">#{item.ordinal}</span>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => deleteBillItem(item.id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-sm mb-2">{item.description}</p>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <div className="flex gap-3">
+                    <span>{item.quantity.toFixed(2)} {item.unit}</span>
+                    <span>x {formatCurrency(item.unitPrice)}</span>
+                  </div>
+                  <span className="font-bold text-sm text-foreground">{formatCurrency(item.totalPrice)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          <Card className="bg-muted/50">
+            <CardContent className="p-4 flex justify-between items-center">
+              <span className="font-bold text-sm">UKUPNO:</span>
+              <span className="font-bold">{formatCurrency(totalSum)}</span>
+            </CardContent>
+          </Card>
+        </div>
+        </>
       )}
 
       {/* Add/Edit Item Dialog */}

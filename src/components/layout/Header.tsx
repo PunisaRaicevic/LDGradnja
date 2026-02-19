@@ -1,8 +1,12 @@
 import { useLocation, Link } from 'react-router-dom';
-import { ChevronRight, Home } from 'lucide-react';
+import { ChevronRight, Home, Menu } from 'lucide-react';
 import { useProjectStore } from '@/store/useProjectStore';
 
-export function Header() {
+interface HeaderProps {
+  onMobileMenuToggle: () => void;
+}
+
+export function Header({ onMobileMenuToggle }: HeaderProps) {
   const location = useLocation();
   const { projects } = useProjectStore();
   const pathParts = location.pathname.split('/').filter(Boolean);
@@ -10,20 +14,28 @@ export function Header() {
   const breadcrumbs = buildBreadcrumbs(pathParts, projects);
 
   return (
-    <header className="h-14 border-b bg-white flex items-center px-6 sticky top-0 z-10">
-      <nav className="flex items-center gap-1 text-sm">
-        <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors">
+    <header className="h-14 border-b bg-white flex items-center px-3 md:px-6 sticky top-0 z-10">
+      {/* Mobile hamburger */}
+      <button
+        onClick={onMobileMenuToggle}
+        className="p-2 -ml-1 mr-2 rounded-md hover:bg-muted md:hidden cursor-pointer"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      <nav className="flex items-center gap-1 text-sm overflow-x-auto">
+        <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
           <Home className="h-4 w-4" />
         </Link>
         {breadcrumbs.map((crumb, i) => (
-          <div key={i} className="flex items-center gap-1">
+          <div key={i} className="flex items-center gap-1 flex-shrink-0">
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
             {crumb.to ? (
-              <Link to={crumb.to} className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link to={crumb.to} className="text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
                 {crumb.label}
               </Link>
             ) : (
-              <span className="text-foreground font-medium">{crumb.label}</span>
+              <span className="text-foreground font-medium whitespace-nowrap">{crumb.label}</span>
             )}
           </div>
         ))}

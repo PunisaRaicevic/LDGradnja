@@ -88,52 +88,86 @@ export default function Contracts() {
         </CardContent>
       </Card>
     ) : (
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Br. ugovora</TableHead>
-              <TableHead>Strana</TableHead>
-              <TableHead>Datum</TableHead>
-              <TableHead className="text-right">Iznos</TableHead>
-              <TableHead>Rok</TableHead>
-              <TableHead>Kontakt</TableHead>
-              <TableHead className="text-right">Akcije</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((contract) => (
-              <TableRow key={contract.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleRowClick(contract)}>
-                <TableCell className="font-medium">{contract.contractNumber}</TableCell>
-                <TableCell>{contract.partyName}</TableCell>
-                <TableCell>{formatDate(contract.date)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(contract.amount)}</TableCell>
-                <TableCell>{contract.deadline ? formatDate(contract.deadline) : '-'}</TableCell>
-                <TableCell className="max-w-32 truncate">{contract.contactInfo || '-'}</TableCell>
-                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex justify-end gap-1">
-                    {contract.fileName && (
-                      <Button variant="ghost" size="icon" onClick={() => handleDownload(contract)}>
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" onClick={() => deleteContract(contract.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
+      <>
+        {/* Desktop table */}
+        <Card className="hidden md:block">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Br. ugovora</TableHead>
+                <TableHead>Strana</TableHead>
+                <TableHead>Datum</TableHead>
+                <TableHead className="text-right">Iznos</TableHead>
+                <TableHead>Rok</TableHead>
+                <TableHead>Kontakt</TableHead>
+                <TableHead className="text-right">Akcije</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+            </TableHeader>
+            <TableBody>
+              {items.map((contract) => (
+                <TableRow key={contract.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleRowClick(contract)}>
+                  <TableCell className="font-medium">{contract.contractNumber}</TableCell>
+                  <TableCell>{contract.partyName}</TableCell>
+                  <TableCell>{formatDate(contract.date)}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(contract.amount)}</TableCell>
+                  <TableCell>{contract.deadline ? formatDate(contract.deadline) : '-'}</TableCell>
+                  <TableCell className="max-w-32 truncate">{contract.contactInfo || '-'}</TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end gap-1">
+                      {contract.fileName && (
+                        <Button variant="ghost" size="icon" onClick={() => handleDownload(contract)}>
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => deleteContract(contract.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+
+        {/* Mobile cards */}
+        <div className="space-y-3 md:hidden">
+          {items.map((contract) => (
+            <Card key={contract.id} className="cursor-pointer" onClick={() => handleRowClick(contract)}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-sm">{contract.contractNumber}</h3>
+                    <p className="text-xs text-muted-foreground">{contract.partyName}</p>
+                  </div>
+                  <span className="font-bold text-sm flex-shrink-0">{formatCurrency(contract.amount)}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
+                  <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{formatDate(contract.date)}</span>
+                  {contract.deadline && <span>Rok: {formatDate(contract.deadline)}</span>}
+                </div>
+                <div className="flex gap-1 border-t pt-2" onClick={(e) => e.stopPropagation()}>
+                  {contract.fileName && (
+                    <Button variant="ghost" size="sm" onClick={() => handleDownload(contract)}>
+                      <Download className="h-3.5 w-3.5 mr-1" /> Preuzmi
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => deleteContract(contract.id)}>
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </>
     )
   );
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Ugovori i dokumentacija</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">Ugovori i dokumentacija</h1>
       </div>
 
       <div className="relative mb-4">
