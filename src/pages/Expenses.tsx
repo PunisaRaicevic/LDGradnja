@@ -792,7 +792,7 @@ export default function Expenses() {
 
       {/* Expense Detail Modal */}
       <Dialog open={!!detailExpense} onOpenChange={() => { setDetailExpense(null); setDetailPreviewUrl(null); }}>
-        <DialogContent onClose={() => { setDetailExpense(null); setDetailPreviewUrl(null); }} className="max-w-4xl max-h-[90vh] overflow-hidden p-0">
+        <DialogContent onClose={() => { setDetailExpense(null); setDetailPreviewUrl(null); }} className="w-full max-w-4xl max-h-[90vh] overflow-hidden p-0">
           {detailExpense && (
             <>
               <div className="flex items-center justify-between p-6 border-b">
@@ -820,7 +820,19 @@ export default function Expenses() {
                     <div className="border rounded-xl overflow-hidden bg-muted/30">
                       {detailPreviewUrl ? (
                         detailPreviewUrl.toLowerCase().includes('.pdf') ? (
-                          <iframe src={detailPreviewUrl} className="w-full aspect-[3/4] rounded" title="Faktura PDF" />
+                          <div>
+                            {/* Desktop: iframe preview */}
+                            <iframe src={detailPreviewUrl} className="w-full aspect-[3/4] rounded hidden lg:block" title="Faktura PDF" />
+                            {/* Mobile: open PDF button (WebView doesn't support inline PDF) */}
+                            <div className="aspect-[3/4] flex flex-col items-center justify-center lg:hidden">
+                              <FileText className="w-12 h-12 text-primary mb-3" />
+                              <p className="text-sm text-muted-foreground mb-3">PDF dokument</p>
+                              <Button onClick={() => window.open(detailPreviewUrl, '_blank')}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                Otvori PDF
+                              </Button>
+                            </div>
+                          </div>
                         ) : (
                           <img src={detailPreviewUrl} alt="Račun" className="w-full h-auto" />
                         )
