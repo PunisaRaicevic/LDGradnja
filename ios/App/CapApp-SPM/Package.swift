@@ -13,7 +13,8 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.1.0"),
         .package(name: "CapacitorCommunityFileOpener", path: "..\..\..\node_modules\@capacitor-community\file-opener"),
-        .package(name: "CapacitorFilesystem", path: "..\..\..\node_modules\@capacitor\filesystem")
+        .package(name: "CapacitorFilesystem", path: "..\..\..\node_modules\@capacitor\filesystem"),
+        .package(name: "CapacitorLiveUpdates", path: "..\..\..\node_modules\@capacitor\live-updates")
     ],
     targets: [
         .target(
@@ -22,7 +23,8 @@ let package = Package(
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
                 .product(name: "CapacitorCommunityFileOpener", package: "CapacitorCommunityFileOpener"),
-                .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem")
+                .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
+                .product(name: "CapacitorLiveUpdates", package: "CapacitorLiveUpdates")
             ]
         )
     ]
