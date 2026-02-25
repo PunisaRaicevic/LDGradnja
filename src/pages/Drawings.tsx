@@ -1,10 +1,11 @@
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { useDrawingStore } from '@/store/useDrawingStore';
 import { useSettingsStore } from '@/store/useSettingsStore';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,77 @@ export default function Drawings() {
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // File watcher (Electron: auto-save back to Supabase)
+  const [watchingFile, setWatchingFile] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const fileChangeCleanupRef = useRef<(() => void) | null>(null);
+
+  // Handle file change event from Electron watcher
+  const handleFileChanged = useCallback(async (data: { fileName: string; buffer: ArrayBuffer }) => {
+    // Find the drawing by fileName to get its storage path
+    const drawing = drawings.find(d =>
+      (d.fileName || `${d.name}.dwg`) === data.fileName
+    );
+    if (!drawing?.filePath) return;
+
+    setSyncMessage('Sinhronizujem izmjene...');
+    try {
+      const blob = new Blob([data.buffer]);
+      const { error } = await supabase.storage.from('drawings')
+        .update(drawing.filePath, blob, { upsert: true });
+
+      if (error) {
+        console.error('[file-sync] Upload error:', error);
+        setSyncMessage('Greska pri sinhronizaciji!');
+      } else {
+        // Update file size in database
+        await supabase.from('drawings')
+          .update({ file_size: blob.size })
+          .eq('id', drawing.id);
+        setSyncMessage('Izmjene sacuvane!');
+        // Reload drawings to refresh UI
+        if (projectId) loadDrawings(projectId);
+      }
+    } catch (e: any) {
+      console.error('[file-sync] Error:', e);
+      setSyncMessage('Greska pri sinhronizaciji!');
+    }
+    // Clear message after 3 seconds
+    setTimeout(() => setSyncMessage(null), 3000);
+  }, [drawings, projectId, loadDrawings]);
+
+  // Set up file change listener
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onFileChanged || !watchingFile) return;
+
+    // Clean up previous listener
+    if (fileChangeCleanupRef.current) {
+      fileChangeCleanupRef.current();
+    }
+
+    const cleanup = api.onFileChanged(handleFileChanged);
+    fileChangeCleanupRef.current = cleanup;
+
+    return () => {
+      cleanup();
+      fileChangeCleanupRef.current = null;
+    };
+  }, [watchingFile, handleFileChanged]);
+
+  // Clean up watcher on unmount
+  useEffect(() => {
+    return () => {
+      const api = (window as any).electronAPI;
+      if (api?.stopWatching && watchingFile) {
+        api.stopWatching(watchingFile);
+      }
+      if (fileChangeCleanupRef.current) {
+        fileChangeCleanupRef.current();
+      }
+    };
+  }, [watchingFile]);
 
   // Settings
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -115,7 +187,7 @@ export default function Drawings() {
           setPreviewError(e.message || 'Greška pri otvaranju fajla');
         }
       } else if ((window as any).electronAPI?.isElectron) {
-        // Electron desktop: open DWG with system app (AutoCAD)
+        // Electron desktop: open DWG with system app (AutoCAD) + watch for changes
         try {
           const blob = await getDrawingFile(id);
           if (!blob) {
@@ -125,9 +197,23 @@ export default function Drawings() {
           }
           const fileName = drawing.fileName || `${drawing.name}.dwg`;
           const buffer = await blob.arrayBuffer();
-          const result = await (window as any).electronAPI.openFileWithSystem(buffer, fileName);
+
+          // Stop watching previous file if any
+          if (watchingFile) {
+            await (window as any).electronAPI.stopWatching(watchingFile);
+          }
+
+          const api = (window as any).electronAPI;
+          const result = api.openFileWithWatch
+            ? await api.openFileWithWatch(buffer, fileName)
+            : await api.openFileWithSystem(buffer, fileName);
+
           if (!result.success) {
             setPreviewError(result.error || 'Greška pri otvaranju fajla');
+          } else if (result.watching) {
+            setWatchingFile(fileName);
+            setSyncMessage('AutoCAD otvoren — izmjene ce se automatski sacuvati');
+            setTimeout(() => setSyncMessage(null), 4000);
           }
         } catch (e: any) {
           setPreviewError(e.message || 'Greška pri otvaranju fajla');
@@ -215,6 +301,18 @@ export default function Drawings() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Pretrazi crteze..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
       </div>
+
+      {/* Sync notification banner */}
+      {syncMessage && (
+        <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm flex items-center gap-2">
+          {syncMessage.includes('Sinhronizujem') ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : syncMessage.includes('sacuvane') ? (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : null}
+          {syncMessage}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <Card>

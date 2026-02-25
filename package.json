@@ -35,6 +35,9 @@
     "xlsx": "^0.18.5",
     "zustand": "^5.0.11"
   },
+  "main": "electron/main.js",
+  "author": "LDGradnja",
+  "description": "LDGradnja - Aplikacija za upravljanje građevinskim projektima",
   "build": {
     "appId": "com.ldgradnja.desktop",
     "productName": "LDGradnja",
@@ -42,15 +45,26 @@
       "output": "electron-dist"
     },
     "files": [
-      "dist/**/*",
-      "electron/**/*"
+      "package.json",
+      {
+        "from": "dist",
+        "to": "dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "electron",
+        "to": "electron",
+        "filter": ["**/*"]
+      }
     ],
     "extraMetadata": {
-      "main": "electron/main.js"
+      "main": "electron/main.js",
+      "type": "commonjs"
     },
     "win": {
       "target": "nsis",
-      "icon": "public/favicon.ico"
+      "icon": "public/favicon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": true,
