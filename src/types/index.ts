@@ -34,6 +34,18 @@ export interface BillItem {
   totalPrice: number;
 }
 
+export interface PredmjerFile {
+  id: string;
+  projectId: string;
+  name: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  description: string;
+  uploadedAt: string;
+  filePath?: string;
+}
+
 export interface InterimSituation {
   id: string;
   projectId: string;
@@ -250,3 +262,20 @@ export interface ProjectMember {
   userEmail?: string;
   projectName?: string;
 }
+
+// Construction Log types
+export type {
+  ConstructionLogSituation,
+  ConstructionLogSheet,
+  ConstructionLogPosition,
+  ParsedSheetData,
+  ParsedSheet,
+  ParsedLogRow,
+  LogValidationIssue,
+  LogValidationCategory,
+  LogValidationSeverity,
+  PositionTracker,
+  LogSituationStatus,
+  LogSheetStatus,
+  PositionMatchStatus,
+} from './construction-log';

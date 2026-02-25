@@ -42,7 +42,11 @@ const SECTION_KEYWORDS = [
   'spavaća', 'kupatilo', 'kuhinja', 'dnevn', 'hodnik', 'balkon', 'terasa',
   'soba', 'prostorij', 'etaža', 'sprat', 'prizemlje', 'podrum', 'krov',
   'ukupno', 'total', 'svega', 'rekapitulacija', 'suma',
+  'finansij', 'dio ponude', 'predmet', 'nabavk',
 ];
+
+// Roman numerals and single letters used as section markers, not ordinals
+const SECTION_ORDINAL_PATTERN = /^(I{1,3}|IV|V|VI{0,3}|IX|X|XI{0,3}|[A-Z])$/i;
 const FOOTER_KEYWORDS = [
   'ukupno', 'total', 'svega', 'rekapitulacija', 'suma', 'zbir',
   'potpis', 'direktor', 'pečat', 'datum', 'mjesto', 'odobrio',
@@ -126,6 +130,12 @@ function classifyRow(
   const rawOrdinal = ordinalCol !== undefined ? rawCells[ordinalCol] : '';
   const ordinal = parseInt(String(rawOrdinal));
 
+  // Detect section markers: Roman numerals (I, II, III) or single letters (A, B, C)
+  const trimmedOrdinal = String(rawOrdinal).trim();
+  if (trimmedOrdinal && SECTION_ORDINAL_PATTERN.test(trimmedOrdinal)) {
+    return { rowIndex, type: 'section', reason: `Oznaka sekcije: "${nonEmptyCells.slice(0, 3).join(' ')}"`, rawCells, included: false };
+  }
+
   // Get description
   let description = columnMap['description'] !== undefined ? rawCells[columnMap['description']] || '' : '';
   if (hasDetails) {
@@ -135,21 +145,36 @@ function classifyRow(
     }
   }
 
-  // Check for section headers - text spanning across, usually no numbers
-  const hasNumericData = rawCells.some((c, i) => {
+  // Check for numeric data in quantity and price columns specifically
+  const qtyCol = columnMap['quantity'];
+  const priceCol = columnMap['unitPrice'];
+  const hasQuantity = qtyCol !== undefined &&
+    !isNaN(parseFloat(String(rawCells[qtyCol]).replace(',', '.'))) &&
+    parseFloat(String(rawCells[qtyCol]).replace(',', '.')) > 0;
+  const hasPrice = priceCol !== undefined &&
+    !isNaN(parseFloat(String(rawCells[priceCol]).replace(',', '.'))) &&
+    parseFloat(String(rawCells[priceCol]).replace(',', '.')) > 0;
+
+  // Check for any numeric data in non-ordinal columns
+  const hasAnyNumericData = rawCells.some((c, i) => {
     if (i === ordinalCol) return false;
     return !isNaN(parseFloat(String(c).replace(',', '.'))) && parseFloat(String(c).replace(',', '.')) > 0;
   });
 
   // Section detection: has text but no numeric data (quantity, price)
-  if (!hasNumericData && nonEmptyCells.length <= 3) {
+  if (!hasAnyNumericData && nonEmptyCells.length <= 4) {
     if (SECTION_KEYWORDS.some(k => fullText.includes(k))) {
-      return { rowIndex, type: 'section', reason: `Naslov sekcije: "${nonEmptyCells.join(' ')}"`, rawCells, included: false };
+      return { rowIndex, type: 'section', reason: `Naslov sekcije: "${nonEmptyCells.slice(0, 3).join(' ')}"`, rawCells, included: false };
     }
-    // Also catch rows with just letters in first columns (like "A", "B" section markers)
-    if (nonEmptyCells.every(c => c.length < 30) && isNaN(ordinal)) {
-      return { rowIndex, type: 'section', reason: `Oznaka sekcije: "${nonEmptyCells.join(' ')}"`, rawCells, included: false };
+    // Rows with just short text and no numbers — section markers
+    if (nonEmptyCells.every(c => c.length < 40) && isNaN(ordinal)) {
+      return { rowIndex, type: 'section', reason: `Oznaka sekcije: "${nonEmptyCells.slice(0, 3).join(' ')}"`, rawCells, included: false };
     }
+  }
+
+  // Section keywords in text even with some numeric data but no ordinal
+  if (SECTION_KEYWORDS.some(k => fullText.includes(k)) && isNaN(ordinal) && !hasQuantity) {
+    return { rowIndex, type: 'section', reason: `Naslov sekcije: "${nonEmptyCells.slice(0, 3).join(' ')}"`, rawCells, included: false };
   }
 
   // Footer detection - usually near the end
@@ -157,39 +182,64 @@ function classifyRow(
     return { rowIndex, type: 'footer', reason: `Footer/Sumiranje: "${nonEmptyCells.slice(0, 3).join(' ')}"`, rawCells, included: false };
   }
 
-  // Valid data row - has ordinal number and description
-  if (!isNaN(ordinal) && description) {
-    const unit = columnMap['unit'] !== undefined ? rawCells[columnMap['unit']] || '' : '';
-    const quantity = columnMap['quantity'] !== undefined
-      ? parseFloat(String(rawCells[columnMap['quantity']]).replace(',', '.')) || 0
-      : 0;
-    const unitPrice = columnMap['unitPrice'] !== undefined
-      ? parseFloat(String(rawCells[columnMap['unitPrice']]).replace(',', '.')) || 0
-      : 0;
-    let totalPrice = columnMap['totalPrice'] !== undefined
-      ? parseFloat(String(rawCells[columnMap['totalPrice']]).replace(',', '.')) || 0
-      : 0;
-    if (totalPrice === 0 && quantity > 0 && unitPrice > 0) {
-      totalPrice = quantity * unitPrice;
-    }
+  // Helper to parse numeric values from cells
+  const parseNum = (col: number | undefined) => {
+    if (col === undefined) return 0;
+    return parseFloat(String(rawCells[col]).replace(',', '.')) || 0;
+  };
 
+  const unit = columnMap['unit'] !== undefined ? rawCells[columnMap['unit']] || '' : '';
+  const quantity = parseNum(qtyCol);
+  const unitPrice = parseNum(priceCol);
+  let totalPrice = parseNum(columnMap['totalPrice']);
+  if (totalPrice === 0 && quantity > 0 && unitPrice > 0) {
+    totalPrice = quantity * unitPrice;
+  }
+
+  // CASE 1: Row with ordinal number AND numeric data — it's a bill item
+  if (!isNaN(ordinal) && (quantity > 0 || unitPrice > 0 || totalPrice > 0)) {
     return {
       rowIndex,
       type: 'data',
       reason: 'Stavka predmjera',
       rawCells,
-      parsed: { ordinal, description, unit, quantity, unitPrice, totalPrice },
+      parsed: { ordinal, description: description || `(stavka ${ordinal})`, unit, quantity, unitPrice, totalPrice },
       included: true,
     };
   }
 
-  // Row with ordinal but no description
-  if (!isNaN(ordinal) && !description) {
-    return { rowIndex, type: 'section', reason: 'Red sa brojem ali bez opisa', rawCells, included: false };
+  // Row with ordinal but NO numeric data — it's a parent header (e.g. "8. Skidanje boje...")
+  // Sub-rows below will be captured as individual items
+  if (!isNaN(ordinal) && quantity === 0 && unitPrice === 0 && totalPrice === 0) {
+    return { rowIndex, type: 'section', reason: `Naslov stavke: "${(description || '').slice(0, 50)}"`, rawCells, included: false };
   }
 
-  // Catch-all for unclassified rows
-  if (isNaN(ordinal) && nonEmptyCells.length > 0) {
+  // CASE 2: No ordinal but HAS numeric data (quantity or price) — this is a sub-row or orphan data row
+  // Include it as data so values are not lost; description from whatever text is available
+  if (hasQuantity || hasPrice || totalPrice > 0) {
+    // Build description from non-numeric, non-empty cells
+    const textCells = rawCells.filter((c, i) => {
+      if (!c) return false;
+      if (i === qtyCol || i === priceCol || i === columnMap['totalPrice'] || i === columnMap['unit']) return false;
+      if (i === ordinalCol) return false;
+      // Skip if it's just a number
+      if (!isNaN(parseFloat(String(c).replace(',', '.')))) return false;
+      return true;
+    });
+    const fallbackDesc = textCells.join(' ').trim() || description;
+
+    return {
+      rowIndex,
+      type: 'data',
+      reason: 'Red sa numeričkim podacima',
+      rawCells,
+      parsed: { ordinal: 0, description: fallbackDesc || '(bez opisa)', unit, quantity, unitPrice, totalPrice },
+      included: true,
+    };
+  }
+
+  // Catch-all for rows with text but no numbers
+  if (nonEmptyCells.length > 0) {
     return { rowIndex, type: 'section', reason: `Neklasifikovan red: "${nonEmptyCells.slice(0, 2).join(' ')}"`, rawCells, included: false };
   }
 
@@ -237,10 +287,16 @@ function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>
       const next = rows[j];
       if (next.type === 'empty') continue;
 
-      // Pattern 2: data rows with sub-ordinals (8.1, 8.2, etc.)
       if (next.type === 'data' && next.parsed) {
         const nextRawOrdinal = ordinalCol !== undefined ? next.rawCells[ordinalCol] : '';
+        // Pattern 2: data rows with sub-ordinals (8.1, 8.2, etc.)
         if (isSubOrdinal(nextRawOrdinal, parentOrdinal)) {
+          subRows.push(next);
+          continue;
+        }
+        // Pattern 3: data rows with ordinal=0 (no ordinal in Excel) directly after parent
+        // These are sub-rows like "Zidovi", "Plafon" under item 8
+        if (next.parsed.ordinal === 0 && next.parsed.totalPrice > 0) {
           subRows.push(next);
           continue;
         }
@@ -329,6 +385,99 @@ function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>
   }
 }
 
+/**
+ * Analyzes a single sheet and returns header info + analyzed rows.
+ */
+function analyzeSheet(
+  sheetData: any[][],
+  sheetName: string,
+  globalRowOffset: number
+): { rows: AnalyzedRow[]; columnMap: Record<string, number>; headerRowIndex: number } {
+  // Find header row
+  let headerRowIndex = -1;
+  let columnMap: Record<string, number> = {};
+
+  for (let i = 0; i < Math.min(sheetData.length, 15); i++) {
+    const row = sheetData[i];
+    if (!row) continue;
+    const rowLower = row.map((cell: any) => String(cell).toLowerCase().trim());
+
+    let matchCount = 0;
+    for (const keyword of HEADER_KEYWORDS) {
+      if (rowLower.some((cell: string) => cell.includes(keyword))) matchCount++;
+    }
+
+    if (matchCount >= 3) {
+      headerRowIndex = i;
+      columnMap = findColumnMap(row.map((c: any) => String(c)));
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    headerRowIndex = 0;
+    columnMap = { ordinal: 0, description: 1, unit: 3, quantity: 4, unitPrice: 5, totalPrice: 6 };
+  }
+
+  const hasDetails = columnMap['details'] !== undefined;
+
+  // Analyze each row (use globalRowOffset so row indices are unique across sheets)
+  const analyzedRows: AnalyzedRow[] = sheetData.map((row, i) =>
+    classifyRow(row, i, headerRowIndex, columnMap, sheetData.length, hasDetails)
+  );
+
+  // Apply global offset to rowIndex for display
+  for (const row of analyzedRows) {
+    row.rowIndex = row.rowIndex + globalRowOffset;
+  }
+
+  // No aggregation — each row with numeric data stays as individual item
+  // This ensures the sum in the app matches the sum in Excel exactly
+
+  // Post-processing: propagate parent description to sub-rows
+  // When a parent row (ordinal + description, no numeric data) is marked as 'section',
+  // the following data rows with ordinal=0 should inherit the parent's description.
+  let lastParentDescription = '';
+  let lastParentOrdinal = 0;
+  for (const row of analyzedRows) {
+    // Detect parent header: section with reason starting with "Naslov stavke:"
+    if (row.type === 'section' && row.reason.startsWith('Naslov stavke:')) {
+      const descCol = columnMap['description'];
+      lastParentDescription = descCol !== undefined ? row.rawCells[descCol] || '' : '';
+      // Fallback: extract from the reason string
+      if (!lastParentDescription) {
+        const match = row.reason.match(/Naslov stavke: "(.+?)"/);
+        lastParentDescription = match ? match[1] : '';
+      }
+      // Get the ordinal from the ordinal column
+      const ordCol = columnMap['ordinal'];
+      const rawOrd = ordCol !== undefined ? row.rawCells[ordCol] : '';
+      lastParentOrdinal = parseInt(String(rawOrd)) || 0;
+      continue;
+    }
+
+    // If this is a data row with ordinal=0 and we have a parent description, prepend it
+    if (row.type === 'data' && row.included && row.parsed && row.parsed.ordinal === 0 && lastParentDescription) {
+      const subDesc = row.parsed.description;
+      if (subDesc && subDesc !== '(bez opisa)') {
+        row.parsed.description = `${lastParentDescription} - ${subDesc}`;
+      } else {
+        row.parsed.description = lastParentDescription;
+      }
+      // Give sub-rows the parent's ordinal number
+      row.parsed.ordinal = lastParentOrdinal;
+    }
+
+    // Reset parent context when we hit a new data row with its own ordinal
+    if (row.type === 'data' && row.parsed && row.parsed.ordinal > 0) {
+      lastParentDescription = '';
+      lastParentOrdinal = 0;
+    }
+  }
+
+  return { rows: analyzedRows, columnMap, headerRowIndex };
+}
+
 export function analyzeExcelFile(file: File): Promise<ExcelAnalysis> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -336,63 +485,55 @@ export function analyzeExcelFile(file: File): Promise<ExcelAnalysis> {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const allRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-        // Find header row
-        let headerRowIndex = -1;
-        let columnMap: Record<string, number> = {};
+        const allAnalyzedRows: AnalyzedRow[] = [];
+        let firstColumnMap: Record<string, number> = {};
+        let firstHeaderRowIndex = 0;
+        let globalRowOffset = 0;
+        const sheetSummaries: string[] = [];
 
-        for (let i = 0; i < Math.min(allRows.length, 15); i++) {
-          const row = allRows[i];
-          if (!row) continue;
-          const rowLower = row.map((cell: any) => String(cell).toLowerCase().trim());
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const sheetRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-          let matchCount = 0;
-          for (const keyword of HEADER_KEYWORDS) {
-            if (rowLower.some((cell: string) => cell.includes(keyword))) matchCount++;
+          if (sheetRows.length < 2) {
+            globalRowOffset += sheetRows.length;
+            continue;
           }
 
-          if (matchCount >= 3) {
-            headerRowIndex = i;
-            columnMap = findColumnMap(row.map((c: any) => String(c)));
-            break;
+          const result = analyzeSheet(sheetRows, sheetName, globalRowOffset);
+
+          if (allAnalyzedRows.length === 0) {
+            firstColumnMap = result.columnMap;
+            firstHeaderRowIndex = result.headerRowIndex;
           }
+
+          const sheetDataRows = result.rows.filter(r => r.type === 'data' && r.included);
+          if (sheetDataRows.length > 0) {
+            sheetSummaries.push(`${sheetName}: ${sheetDataRows.length} stavki`);
+          }
+
+          allAnalyzedRows.push(...result.rows);
+          globalRowOffset += sheetRows.length;
         }
 
-        if (headerRowIndex === -1) {
-          headerRowIndex = 0;
-          columnMap = { ordinal: 0, description: 1, unit: 3, quantity: 4, unitPrice: 5, totalPrice: 6 };
-        }
+        const dataRows = allAnalyzedRows.filter(r => r.type === 'data' && r.included);
+        const skippedRows = allAnalyzedRows.filter(r => r.type !== 'data' && r.type !== 'empty');
 
-        const hasDetails = columnMap['details'] !== undefined;
-
-        // Analyze each row
-        const analyzedRows: AnalyzedRow[] = allRows.map((row, i) =>
-          classifyRow(row, i, headerRowIndex, columnMap, allRows.length, hasDetails)
-        );
-
-        // Post-processing: aggregate sub-rows into parent items
-        // Detects pattern: data row with quantity=0 followed by non-data rows with numeric values
-        aggregateSubRows(analyzedRows, columnMap);
-
-        const dataRows = analyzedRows.filter(r => r.type === 'data');
-        const skippedRows = analyzedRows.filter(r => r.type !== 'data' && r.type !== 'empty');
-
+        const sheetsWithData = sheetSummaries.length;
         const summary = [
-          `Pronađeno ${dataRows.length} stavki predmjera.`,
+          `Pronađeno ${dataRows.length} stavki predmjera iz ${workbook.SheetNames.length} ${workbook.SheetNames.length === 1 ? 'sheet-a' : 'sheet-ova'}${sheetsWithData > 0 ? ` (${sheetSummaries.join(', ')})` : ''}.`,
           skippedRows.length > 0 ? `Preskočeno ${skippedRows.length} redova (naslovi, sekcije, footer).` : '',
-          `Zaglavlje detektovano u redu ${headerRowIndex + 1}.`,
         ].filter(Boolean).join(' ');
 
         resolve({
           fileName: file.name,
-          totalRows: allRows.length,
+          totalRows: globalRowOffset,
           dataRows: dataRows.length,
           skippedRows: skippedRows.length,
-          rows: analyzedRows,
-          columnMap,
-          headerRowIndex,
+          rows: allAnalyzedRows,
+          columnMap: firstColumnMap,
+          headerRowIndex: firstHeaderRowIndex,
           summary,
         });
       } catch (err) {

@@ -1,665 +1,376 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useFinanceStore } from '@/store/useFinanceStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { FileOpener } from '@capacitor-community/file-opener';
+import { usePredmjerFileStore } from '@/store/usePredmjerFileStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { FileUpload } from '@/components/shared/FileUpload';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
-  Plus, Trash2, Upload, Download, FileSpreadsheet, Pencil,
-  Bot, CheckCircle, XCircle, AlertTriangle, FileText, Loader2, Info,
+  Download, Trash2, Eye, Search, Upload, Loader2,
+  FileSpreadsheet, FileText, Image, FileIcon,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
-import { analyzeExcelFile, convertAnalysisToBillItems, exportToExcel } from '@/lib/excel';
-import type { ExcelAnalysis } from '@/lib/excel';
-import { validateWithAI } from '@/lib/ai-validator';
-import type { ValidationIssue, ChunkProgress } from '@/types/validation';
-import { UNITS } from '@/types';
-import type { BillItem } from '@/types';
-import PredmjerValidator from '@/components/shared/PredmjerValidator';
+import { formatDate, formatFileSize } from '@/lib/utils';
+import type { PredmjerFile } from '@/types';
 
-const emptyItem = {
-  ordinal: 0,
-  description: '',
-  unit: 'm',
-  quantity: 0,
-  unitPrice: 0,
+const fileTypeConfig: Record<string, { icon: typeof FileText; color: string; label: string }> = {
+  pdf: { icon: FileText, color: 'text-red-500', label: 'PDF' },
+  excel: { icon: FileSpreadsheet, color: 'text-green-600', label: 'Excel' },
+  word: { icon: FileText, color: 'text-blue-600', label: 'Word' },
+  image: { icon: Image, color: 'text-purple-500', label: 'Slika' },
+  other: { icon: FileIcon, color: 'text-gray-500', label: 'Fajl' },
 };
 
-const rowTypeIcons: Record<string, React.ReactNode> = {
-  data: <CheckCircle className="h-4 w-4 text-green-600" />,
-  header: <FileText className="h-4 w-4 text-blue-500" />,
-  title: <FileText className="h-4 w-4 text-blue-500" />,
-  section: <AlertTriangle className="h-4 w-4 text-amber-500" />,
-  footer: <XCircle className="h-4 w-4 text-red-400" />,
-  empty: <XCircle className="h-4 w-4 text-gray-300" />,
-};
-
-const rowTypeLabels: Record<string, string> = {
-  data: 'Stavka',
-  header: 'Zaglavlje',
-  title: 'Naslov',
-  section: 'Sekcija',
-  footer: 'Footer',
-  empty: 'Prazan',
-};
-
-const rowTypeBadgeVariant: Record<string, 'success' | 'default' | 'warning' | 'destructive' | 'secondary'> = {
-  data: 'success',
-  header: 'default',
-  title: 'default',
-  section: 'warning',
-  footer: 'destructive',
-  empty: 'secondary',
-};
+function FileTypeBadge({ fileType }: { fileType: string }) {
+  const config = fileTypeConfig[fileType] || fileTypeConfig.other;
+  return (
+    <Badge variant="outline" className="gap-1">
+      <config.icon className={`h-3 w-3 ${config.color}`} />
+      {config.label}
+    </Badge>
+  );
+}
 
 export default function BillOfQuantities() {
   const { projectId } = useParams();
-  const { billItems, loadBillItems, addBillItem, updateBillItem, deleteBillItem, setBillItems, clearBillItems } = useFinanceStore();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyItem);
+  const { files, loading, loadFiles, addFile, deleteFile, getFile, getSignedUrl } = usePredmjerFileStore();
 
-  // Analysis state
-  const [analysisOpen, setAnalysisOpen] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<ExcelAnalysis | null>(null);
-  const [showSkipped, setShowSkipped] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [description, setDescription] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-  // AI validation state
-  const { loadSettings } = useSettingsStore();
-  const [aiValidating, setAiValidating] = useState(false);
-  const [aiIssues, setAiIssues] = useState<ValidationIssue[]>([]);
-  const [aiProgress, setAiProgress] = useState<ChunkProgress | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
+  // Preview state
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PredmjerFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (projectId) loadBillItems(projectId);
-    loadSettings();
-  }, [projectId, loadBillItems, loadSettings]);
+    if (projectId) loadFiles(projectId);
+  }, [projectId, loadFiles]);
 
-  const totalSum = billItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  const filtered = files.filter((f) =>
+    f.name.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const openNew = () => {
-    setEditingId(null);
-    setForm({ ...emptyItem, ordinal: billItems.length + 1 });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (item: BillItem) => {
-    setEditingId(item.id);
-    setForm({
-      ordinal: item.ordinal,
-      description: item.description,
-      unit: item.unit,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-    });
-    setDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!projectId || !form.description) return;
-    const totalPrice = form.quantity * form.unitPrice;
-    if (editingId) {
-      await updateBillItem(editingId, { ...form, totalPrice });
-    } else {
-      await addBillItem({ ...form, projectId, totalPrice });
+  const handleConfirmUpload = async () => {
+    if (!projectId || pendingFiles.length === 0) return;
+    setUploading(true);
+    for (const file of pendingFiles) {
+      await addFile(projectId, file, description);
     }
-    setDialogOpen(false);
+    setUploading(false);
+    setUploadOpen(false);
+    setDescription('');
+    setPendingFiles([]);
   };
 
-  const runAiValidation = async (analysisResult: ExcelAnalysis) => {
-    const apiKey = useSettingsStore.getState().openaiApiKey;
-    if (!apiKey) return;
+  const handlePreview = async (file: PredmjerFile) => {
+    setPreviewFile(file);
+    setPreviewError(null);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    setPreviewOpen(true);
 
-    const included = analysisResult.rows.filter((r) => r.included && r.parsed);
-    if (included.length === 0) return;
-
-    const fakeBillItems: BillItem[] = included.map((r, i) => ({
-      id: `preview-${i}`,
-      projectId: projectId || '',
-      ordinal: r.parsed!.ordinal,
-      description: r.parsed!.description,
-      unit: r.parsed!.unit,
-      quantity: r.parsed!.quantity,
-      unitPrice: r.parsed!.unitPrice,
-      totalPrice: r.parsed!.totalPrice,
-    }));
-
-    setAiValidating(true);
-    setAiIssues([]);
-    setAiError(null);
-    setAiProgress(null);
-
-    try {
-      const issues = await validateWithAI(fakeBillItems, {
-        apiKey,
-        onProgress: (progress) => setAiProgress(progress),
-      });
-      setAiIssues(issues);
-    } catch (err: any) {
-      setAiError(err.message || 'AI validacija nije uspjela');
-    } finally {
-      setAiValidating(false);
-    }
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-
-    setAnalyzing(true);
-    setAnalysisOpen(true);
-    setShowSkipped(false);
-    setAiIssues([]);
-    setAiError(null);
-    setAiValidating(false);
-
-    try {
-      const result = await analyzeExcelFile(file);
-      setAnalysis(result);
-      // Start AI validation in background (non-blocking)
-      runAiValidation(result);
-    } catch {
-      alert('Greška pri čitanju fajla.');
-      setAnalysisOpen(false);
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
-  const toggleRowInclusion = (rowIndex: number) => {
-    if (!analysis) return;
-    const updated = { ...analysis };
-    updated.rows = updated.rows.map((r) =>
-      r.rowIndex === rowIndex ? { ...r, included: !r.included } : r
-    );
-    updated.dataRows = updated.rows.filter((r) => r.included).length;
-    setAnalysis(updated);
-  };
-
-  const handleConfirmImport = async () => {
-    if (!analysis || !projectId) return;
-    const items = convertAnalysisToBillItems(analysis, projectId);
-    if (items.length === 0) {
-      alert('Nema stavki za import.');
+    // For native mobile: download and open with system app
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const blob = await getFile(file.id);
+        if (!blob) {
+          setPreviewLoading(false);
+          setPreviewError('Nije moguće preuzeti fajl');
+          return;
+        }
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1]);
+          };
+          reader.readAsDataURL(blob);
+        });
+        const saved = await Filesystem.writeFile({
+          path: file.fileName,
+          data: base64,
+          directory: Directory.Cache,
+        });
+        const mimeTypes: Record<string, string> = {
+          pdf: 'application/pdf',
+          excel: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          word: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          image: 'image/jpeg',
+        };
+        await FileOpener.open({
+          filePath: saved.uri,
+          contentType: mimeTypes[file.fileType] || 'application/octet-stream',
+        });
+      } catch (e: any) {
+        setPreviewError(e.message || 'Greška pri otvaranju fajla');
+      }
+      setPreviewLoading(false);
+      setPreviewOpen(false);
       return;
     }
-    await setBillItems(items);
-    setAnalysisOpen(false);
-    setAnalysis(null);
-    setAiIssues([]);
-    setAiError(null);
-    setAiValidating(false);
+
+    // Web: inline preview for PDF and images, signed URL for others
+    if (file.fileType === 'pdf' || file.fileType === 'image') {
+      const blob = await getFile(file.id);
+      if (!blob) {
+        setPreviewLoading(false);
+        setPreviewError('Nije moguće preuzeti fajl');
+        return;
+      }
+      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewLoading(false);
+    } else {
+      // Excel, Word, other — open signed URL in new tab
+      const url = await getSignedUrl(file.id);
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        setPreviewError('Nije moguće generisati URL za pregled');
+      }
+      setPreviewLoading(false);
+      setPreviewOpen(false);
+    }
   };
 
-  const handleExport = () => {
-    const data = billItems.map((item) => ({
-      'R.br': item.ordinal,
-      'Opis': item.description,
-      'Jed.': item.unit,
-      'Količina': item.quantity,
-      'Jed. cijena': item.unitPrice,
-      'Ukupno': item.totalPrice,
-    }));
-    exportToExcel(data, 'predmjer-radova');
+  const closePreview = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPreviewFile(null);
+    setPreviewOpen(false);
+    setPreviewError(null);
   };
 
-  // Analysis stats
-  const includedRows = analysis?.rows.filter((r) => r.included) || [];
-  const skippedRows = analysis?.rows.filter((r) => !r.included && r.type !== 'empty') || [];
-  const includedTotal = includedRows.reduce((sum, r) => sum + (r.parsed?.totalPrice || 0), 0);
+  const handleDownload = async (file: PredmjerFile) => {
+    const blob = await getFile(file.id);
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <h1 className="text-xl lg:text-2xl font-bold">Predmjer radova</h1>
-        <div className="flex flex-wrap gap-2">
-          <input id="excel-import" type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileSelect} />
-          <Button variant="outline" onClick={() => document.getElementById('excel-import')?.click()}>
-            <Upload className="h-4 w-4 mr-2" />
-            Import Excel
-          </Button>
-          <Button variant="outline" onClick={handleExport} disabled={billItems.length === 0}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <PredmjerValidator
-            items={billItems}
-            onApplyFixes={async (fixes) => {
-              for (const fix of fixes) {
-                await updateBillItem(fix.id, fix.data);
-              }
-            }}
-          />
-          {billItems.length > 0 && (
-            <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Obriši predmjer
-            </Button>
-          )}
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nova stavka
-          </Button>
-        </div>
+        <Button onClick={() => setUploadOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Upload
+        </Button>
       </div>
 
-      {billItems.length === 0 ? (
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Pretraži fajlove..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {loading ? (
+        <div className="py-12 text-center">
+          <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">Učitavam fajlove...</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">Nema stavki u predmjeru</p>
-            <p className="text-sm text-muted-foreground mt-1">Dodajte stavke ručno ili importujte iz Excel fajla</p>
+            <p className="text-muted-foreground">Nema uploadovanih fajlova</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Uploadujte PDF, Excel, Word ili slike predmjera
+            </p>
           </CardContent>
         </Card>
       ) : (
         <>
-        {/* Desktop table */}
-        <Card className="hidden lg:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">R.br</TableHead>
-                <TableHead>Opis rada</TableHead>
-                <TableHead className="w-20">Jed.</TableHead>
-                <TableHead className="w-24 text-right">Količina</TableHead>
-                <TableHead className="w-32 text-right">Jed. cijena</TableHead>
-                <TableHead className="w-32 text-right">Ukupno</TableHead>
-                <TableHead className="w-24 text-right">Akcije</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {billItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.ordinal}</TableCell>
-                  <TableCell>{item.description}</TableCell>
-                  <TableCell>{item.unit}</TableCell>
-                  <TableCell className="text-right">{item.quantity.toFixed(2)}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
-                  <TableCell className="text-right font-medium">{formatCurrency(item.totalPrice)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteBillItem(item.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {/* Desktop table */}
+          <Card className="hidden lg:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Naziv</TableHead>
+                  <TableHead>Tip</TableHead>
+                  <TableHead>Veličina</TableHead>
+                  <TableHead>Opis</TableHead>
+                  <TableHead>Datum</TableHead>
+                  <TableHead className="text-right">Akcije</TableHead>
                 </TableRow>
-              ))}
-              <TableRow className="bg-muted/50 font-bold">
-                <TableCell colSpan={5} className="text-right">UKUPNO:</TableCell>
-                <TableCell className="text-right">{formatCurrency(totalSum)}</TableCell>
-                <TableCell />
-              </TableRow>
-            </TableBody>
-          </Table>
-        </Card>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((file) => (
+                  <TableRow key={file.id}>
+                    <TableCell className="font-medium">{file.name}</TableCell>
+                    <TableCell>
+                      <FileTypeBadge fileType={file.fileType} />
+                    </TableCell>
+                    <TableCell>{formatFileSize(file.fileSize)}</TableCell>
+                    <TableCell className="text-muted-foreground max-w-48 truncate">
+                      {file.description || '—'}
+                    </TableCell>
+                    <TableCell>{formatDate(file.uploadedAt)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handlePreview(file)} title="Pregled">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDownload(file)} title="Preuzmi">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteFile(file.id)} title="Obriši">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
 
-        {/* Mobile cards */}
-        <div className="space-y-3 lg:hidden">
-          {billItems.map((item) => (
-            <Card key={item.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <span className="text-xs text-muted-foreground">#{item.ordinal}</span>
+          {/* Mobile cards */}
+          <div className="space-y-3 lg:hidden">
+            {filtered.map((file) => (
+              <Card key={file.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <h3 className="font-medium text-sm leading-tight">{file.name}</h3>
+                    <FileTypeBadge fileType={file.fileType} />
+                  </div>
+                  {file.description && (
+                    <p className="text-xs text-muted-foreground mb-2">{file.description}</p>
+                  )}
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                    <span>{formatFileSize(file.fileSize)}</span>
+                    <span>{formatDate(file.uploadedAt)}</span>
+                  </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                      <Pencil className="h-3.5 w-3.5" />
+                    <Button variant="outline" size="sm" onClick={() => handlePreview(file)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Pregled
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => deleteBillItem(item.id)}>
+                    <Button variant="outline" size="sm" onClick={() => handleDownload(file)}>
+                      <Download className="h-3.5 w-3.5 mr-1" /> Preuzmi
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => deleteFile(file.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   </div>
-                </div>
-                <p className="text-sm mb-2">{item.description}</p>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <div className="flex gap-3">
-                    <span>{item.quantity.toFixed(2)} {item.unit}</span>
-                    <span>x {formatCurrency(item.unitPrice)}</span>
-                  </div>
-                  <span className="font-bold text-sm text-foreground">{formatCurrency(item.totalPrice)}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          <Card className="bg-muted/50">
-            <CardContent className="p-4 flex justify-between items-center">
-              <span className="font-bold text-sm">UKUPNO:</span>
-              <span className="font-bold">{formatCurrency(totalSum)}</span>
-            </CardContent>
-          </Card>
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </>
       )}
 
-      {/* Add/Edit Item Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)}>
+      {/* Upload Dialog */}
+      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!open) { setUploadOpen(false); setPendingFiles([]); setDescription(''); } }}>
+        <DialogContent onClose={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); }}>
           <DialogHeader>
-            <DialogTitle>{editingId ? 'Uredi stavku' : 'Nova stavka'}</DialogTitle>
+            <DialogTitle>Upload predmjera</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <Label>R.br</Label>
-                <Input type="number" value={form.ordinal} onChange={(e) => setForm({ ...form, ordinal: parseInt(e.target.value) || 0 })} />
-              </div>
-              <div className="col-span-3">
-                <Label>Opis rada *</Label>
-                <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label>Jedinica mjere</Label>
-                <Select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
-                  {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                </Select>
-              </div>
-              <div>
-                <Label>Količina</Label>
-                <Input type="number" step="0.01" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: parseFloat(e.target.value) || 0 })} />
-              </div>
-              <div>
-                <Label>Jedinična cijena</Label>
-                <Input type="number" step="0.01" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: parseFloat(e.target.value) || 0 })} />
-              </div>
-            </div>
-            <div className="text-right text-lg font-semibold">
-              Ukupno: {formatCurrency(form.quantity * form.unitPrice)}
-            </div>
+            <Input
+              placeholder="Opis (opciono)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <FileUpload
+              onFilesSelected={setPendingFiles}
+              accept=".pdf,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png,.webp"
+              multiple
+              label="Prevucite PDF, Excel, Word ili slike ovdje"
+            />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Otkaži</Button>
-            <Button onClick={handleSave}>{editingId ? 'Sačuvaj' : 'Dodaj'}</Button>
+            <Button variant="outline" onClick={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); }}>
+              Otkaži
+            </Button>
+            <Button onClick={handleConfirmUpload} disabled={pendingFiles.length === 0 || uploading}>
+              {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              {uploading ? 'Uploadujem...' : `Upload (${pendingFiles.length})`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* AI Analysis Preview Dialog */}
-      <Dialog open={analysisOpen} onOpenChange={(open) => { if (!open) { setAnalysisOpen(false); setAnalysis(null); setAiIssues([]); setAiError(null); setAiValidating(false); } }}>
-        <DialogContent
-          onClose={() => { setAnalysisOpen(false); setAnalysis(null); setAiIssues([]); setAiError(null); setAiValidating(false); }}
-          className="max-w-5xl max-h-[90vh] flex flex-col"
-        >
+      {/* Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={(open) => { if (!open) closePreview(); }}>
+        <DialogContent onClose={closePreview} className="max-w-5xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-primary" />
-              Analiza predmjera
+              {previewFile && (
+                <>
+                  {(() => {
+                    const config = fileTypeConfig[previewFile.fileType] || fileTypeConfig.other;
+                    const Icon = config.icon;
+                    return <Icon className={`h-5 w-5 ${config.color}`} />;
+                  })()}
+                  {previewFile.name}
+                  <FileTypeBadge fileType={previewFile.fileType} />
+                </>
+              )}
             </DialogTitle>
           </DialogHeader>
 
-          {analyzing ? (
-            <div className="py-16 text-center">
-              <Loader2 className="h-10 w-10 mx-auto mb-4 text-primary animate-spin" />
-              <p className="text-lg font-medium">Analiziram Excel fajl...</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Detektujem naslove, sekcije, footer i stavke predmjera
-              </p>
-            </div>
-          ) : analysis ? (
-            <>
-              {/* Summary */}
-              <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <Bot className="h-5 w-5 text-primary mt-0.5" />
-                  <div>
-                    <p className="font-medium text-sm">Rezultat analize: {analysis.fileName}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{analysis.summary}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats Cards */}
-              <div className="grid grid-cols-4 gap-3 mb-4">
-                <div className="border rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-green-600">{includedRows.length}</p>
-                  <p className="text-xs text-muted-foreground">Stavki za import</p>
-                </div>
-                <div className="border rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-500">{skippedRows.length}</p>
-                  <p className="text-xs text-muted-foreground">Preskočenih redova</p>
-                </div>
-                <div className="border rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{analysis.totalRows}</p>
-                  <p className="text-xs text-muted-foreground">Ukupno redova</p>
-                </div>
-                <div className="border rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-primary">{formatCurrency(includedTotal)}</p>
-                  <p className="text-xs text-muted-foreground">Ukupna vrijednost</p>
-                </div>
-              </div>
-
-              {/* AI Semantic Analysis Section */}
-              <div className="border rounded-lg p-4 mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Bot className="h-4 w-4 text-primary" />
-                  <span className="font-medium text-sm">AI Semantička analiza</span>
-                </div>
-                {!useSettingsStore.getState().openaiApiKey ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Info className="h-4 w-4 text-blue-500 shrink-0" />
-                    <span>
-                      Za automatsku AI analizu, podesite OpenAI API ključ u <strong>Troškovi &gt; Podešavanja</strong>.
-                    </span>
-                  </div>
-                ) : aiValidating ? (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
-                    <span className="text-muted-foreground">
-                      AI analizira stavke...
-                      {aiProgress && ` (${aiProgress.processedRows}/${aiProgress.totalRows} redova)`}
-                    </span>
-                  </div>
-                ) : aiError ? (
-                  <div className="flex items-center gap-2 text-sm text-red-600">
-                    <XCircle className="h-4 w-4 shrink-0" />
-                    <span>Greška: {aiError}</span>
-                  </div>
-                ) : aiIssues.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      Pronađeno <strong>{aiIssues.length}</strong> potencijalnih problema:
-                    </p>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {aiIssues.map((issue, i) => (
-                        <div
-                          key={i}
-                          className={`flex items-start gap-2 text-sm p-2 rounded ${
-                            issue.severity === 'error'
-                              ? 'bg-red-50 text-red-800'
-                              : issue.severity === 'warning'
-                              ? 'bg-amber-50 text-amber-800'
-                              : 'bg-blue-50 text-blue-800'
-                          }`}
-                        >
-                          {issue.severity === 'error' ? (
-                            <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                          ) : issue.severity === 'warning' ? (
-                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                          ) : (
-                            <Info className="h-4 w-4 shrink-0 mt-0.5" />
-                          )}
-                          <div>
-                            <span className="font-medium">Red {issue.rowIndex + 1}:</span>{' '}
-                            {issue.message}
-                            {issue.suggestedValue && (
-                              <span className="text-xs ml-1 opacity-75">
-                                (predlog: {issue.suggestedValue})
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-green-700">
-                    <CheckCircle className="h-4 w-4 shrink-0" />
-                    <span>AI nije pronašao probleme u stavkama.</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Toggle skipped rows view */}
-              <div className="flex items-center gap-2 mb-2">
-                <Button
-                  variant={showSkipped ? 'outline' : 'default'}
-                  size="sm"
-                  onClick={() => setShowSkipped(false)}
-                >
-                  <CheckCircle className="h-4 w-4 mr-1" />
-                  Stavke za import ({includedRows.length})
-                </Button>
-                <Button
-                  variant={showSkipped ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setShowSkipped(true)}
-                >
-                  <XCircle className="h-4 w-4 mr-1" />
-                  Preskočeni redovi ({skippedRows.length})
-                </Button>
-              </div>
-
-              {/* Rows Table */}
-              <div className="overflow-y-auto max-h-[40vh] border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10"></TableHead>
-                      <TableHead className="w-20">Tip</TableHead>
-                      <TableHead className="w-12">Red</TableHead>
-                      {!showSkipped ? (
-                        <>
-                          <TableHead className="w-12">R.br</TableHead>
-                          <TableHead>Opis</TableHead>
-                          <TableHead className="w-16">Jed.</TableHead>
-                          <TableHead className="w-20 text-right">Kol.</TableHead>
-                          <TableHead className="w-24 text-right">Cijena</TableHead>
-                          <TableHead className="w-24 text-right">Ukupno</TableHead>
-                          <TableHead className="w-20">Akcija</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead>Razlog preskakanja</TableHead>
-                          <TableHead>Sadržaj reda</TableHead>
-                          <TableHead className="w-20">Akcija</TableHead>
-                        </>
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(showSkipped ? skippedRows : includedRows).map((row) => (
-                      <TableRow
-                        key={row.rowIndex}
-                        className={row.included ? 'bg-green-50/50' : ''}
-                      >
-                        <TableCell>{rowTypeIcons[row.type]}</TableCell>
-                        <TableCell>
-                          <Badge variant={rowTypeBadgeVariant[row.type]} className="text-xs">
-                            {rowTypeLabels[row.type]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs">{row.rowIndex + 1}</TableCell>
-                        {!showSkipped && row.parsed ? (
-                          <>
-                            <TableCell>{row.parsed.ordinal}</TableCell>
-                            <TableCell className="max-w-64 truncate text-sm">{row.parsed.description}</TableCell>
-                            <TableCell>{row.parsed.unit}</TableCell>
-                            <TableCell className="text-right">{row.parsed.quantity.toFixed(2)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(row.parsed.unitPrice)}</TableCell>
-                            <TableCell className="text-right font-medium">{formatCurrency(row.parsed.totalPrice)}</TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs text-red-500"
-                                onClick={() => toggleRowInclusion(row.rowIndex)}
-                              >
-                                Isključi
-                              </Button>
-                            </TableCell>
-                          </>
-                        ) : (
-                          <>
-                            <TableCell className="text-sm text-muted-foreground">{row.reason}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground max-w-64 truncate">
-                              {row.rawCells.filter(Boolean).join(' | ')}
-                            </TableCell>
-                            <TableCell>
-                              {row.type !== 'empty' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs text-green-600"
-                                  onClick={() => toggleRowInclusion(row.rowIndex)}
-                                >
-                                  Uključi
-                                </Button>
-                              )}
-                            </TableCell>
-                          </>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </>
-          ) : null}
-
-          {analysis && !analyzing && (
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => { setAnalysisOpen(false); setAnalysis(null); setAiIssues([]); setAiError(null); setAiValidating(false); }}>
-                Otkaži
-              </Button>
-              <Button onClick={handleConfirmImport} disabled={includedRows.length === 0}>
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Importuj {includedRows.length} stavki
-              </Button>
-            </DialogFooter>
+          {/* PDF Preview */}
+          {previewUrl && previewFile?.fileType === 'pdf' && (
+            <iframe src={previewUrl} className="w-full flex-1 min-h-[65vh] rounded border" title="PDF Preview" />
           )}
-        </DialogContent>
-      </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent onClose={() => setDeleteConfirmOpen(false)} className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" />
-              Obriši predmjer?
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Da li ste sigurni da želite obrisati <strong>sve stavke ({billItems.length})</strong> iz predmjera radova?
-            Ova akcija je nepovratna.
-          </p>
+          {/* Image Preview */}
+          {previewUrl && previewFile?.fileType === 'image' && (
+            <div className="flex-1 min-h-[50vh] flex items-center justify-center overflow-auto">
+              <img src={previewUrl} alt={previewFile.name} className="max-w-full max-h-[70vh] object-contain rounded" />
+            </div>
+          )}
+
+          {/* Loading */}
+          {previewLoading && (
+            <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center">
+              <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
+              <p className="font-medium">Učitavam pregled...</p>
+            </div>
+          )}
+
+          {/* Error */}
+          {previewError && !previewLoading && (
+            <div className="flex-1 min-h-[40vh] flex flex-col items-center justify-center bg-muted/30 rounded-lg border border-dashed p-8">
+              <FileIcon className="h-12 w-12 text-destructive mb-4" />
+              <p className="font-medium text-destructive mb-2">Greška pri učitavanju</p>
+              <p className="text-sm text-muted-foreground text-center mb-4">{previewError}</p>
+              {previewFile && (
+                <Button onClick={() => handleDownload(previewFile)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Preuzmi
+                </Button>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>Otkaži</Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                if (projectId) {
-                  await clearBillItems(projectId);
-                  setDeleteConfirmOpen(false);
-                }
-              }}
-            >
-              Da, obriši sve
-            </Button>
+            {previewFile && (
+              <Button variant="outline" onClick={() => handleDownload(previewFile)}>
+                <Download className="h-4 w-4 mr-2" />
+                Preuzmi
+              </Button>
+            )}
+            <Button variant="outline" onClick={closePreview}>Zatvori</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
