@@ -4,19 +4,17 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { useDrawingStore } from '@/store/useDrawingStore';
-import { useSettingsStore } from '@/store/useSettingsStore';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { FileUpload } from '@/components/shared/FileUpload';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Download, Trash2, Eye, Search, FileText, Upload, FileBox,
-  Loader2, Settings, CheckCircle,
+  Loader2, CheckCircle,
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '@/lib/utils';
 import type { Drawing } from '@/types';
@@ -28,7 +26,6 @@ const DxfViewer = lazy(() =>
 export default function Drawings() {
   const { projectId } = useParams();
   const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile } = useDrawingStore();
-  const { backendUrl, setBackendUrl, loadSettings } = useSettingsStore();
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [description, setDescription] = useState('');
@@ -114,14 +111,10 @@ export default function Drawings() {
     };
   }, [watchingFile]);
 
-  // Settings
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [tempBackendUrl, setTempBackendUrl] = useState('');
 
   useEffect(() => {
     if (projectId) loadDrawings(projectId);
-    loadSettings();
-  }, [projectId, loadDrawings, loadSettings]);
+  }, [projectId, loadDrawings]);
 
   const filtered = drawings.filter((d) =>
     d.name.toLowerCase().includes(search.toLowerCase())
@@ -277,24 +270,14 @@ export default function Drawings() {
     }
   };
 
-  const handleSaveSettings = () => {
-    setBackendUrl(tempBackendUrl);
-    setSettingsOpen(false);
-  };
-
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <h1 className="text-xl lg:text-2xl font-bold">Crtezi i planovi</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={() => { setTempBackendUrl(backendUrl); setSettingsOpen(true); }}>
-            <Settings className="h-4 w-4" />
-          </Button>
-          <Button onClick={() => setUploadOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Upload
-          </Button>
-        </div>
+        <Button onClick={() => setUploadOpen(true)}>
+          <Upload className="h-4 w-4 mr-2" />
+          Upload
+        </Button>
       </div>
 
       <div className="relative mb-4">
@@ -492,40 +475,6 @@ export default function Drawings() {
         </DialogContent>
       </Dialog>
 
-      {/* Backend Settings Dialog */}
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent onClose={() => setSettingsOpen(false)} className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Backend podesavanja
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Backend URL (Railway)</Label>
-              <Input
-                value={tempBackendUrl}
-                onChange={(e) => setTempBackendUrl(e.target.value)}
-                placeholder="https://ldgradnja-backend.up.railway.app"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                URL vaseg Railway servisa za konverziju DWG fajlova
-              </p>
-            </div>
-            {backendUrl && (
-              <div className="flex items-center gap-2 text-sm text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                Backend je konfigurisan
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSettingsOpen(false)}>Otkazi</Button>
-            <Button onClick={handleSaveSettings}>Sacuvaj</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
