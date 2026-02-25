@@ -26,7 +26,7 @@ const DxfViewer = lazy(() =>
 
 export default function Drawings() {
   const { projectId } = useParams();
-  const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile, getDrawingSignedUrl } = useDrawingStore();
+  const { drawings, loadDrawings, addDrawing, deleteDrawing, getDrawingFile } = useDrawingStore();
   const { backendUrl, setBackendUrl, loadSettings } = useSettingsStore();
   const [search, setSearch] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -115,13 +115,22 @@ export default function Drawings() {
           setPreviewError(e.message || 'Greška pri otvaranju fajla');
         }
       } else {
-        const signedUrl = await getDrawingSignedUrl(id);
-        if (!signedUrl) {
+        // Desktop: download .dwg file — Windows will open it with AutoCAD
+        const blob = await getDrawingFile(id);
+        if (!blob) {
           setPreviewLoading(false);
-          setPreviewError('Nije moguće generisati URL za pregled');
+          setPreviewError('Nije moguće preuzeti fajl');
           return;
         }
-        window.open(signedUrl, '_blank');
+        const fileName = drawing.fileName || `${drawing.name}.dwg`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       }
       setPreviewLoading(false);
       setPreviewOpen(false);
