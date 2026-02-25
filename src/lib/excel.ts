@@ -269,7 +269,7 @@ function isSubOrdinal(rawOrdinal: string, parentOrdinal: number): boolean {
  * 2. Data row followed by data rows with sub-ordinals (8.1, 8.2, 8a, 8b)
  * Sub-row values are summed into the parent and sub-rows are marked as included=false.
  */
-function aggregateSubRows(rows: AnalyzedRow[], _columnMap: Record<string, number>): void {
+export function aggregateSubRows(rows: AnalyzedRow[], columnMap: Record<string, number>): void {
   const ordinalCol = columnMap['ordinal'];
 
   for (let i = 0; i < rows.length; i++) {
