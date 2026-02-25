@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { FileOpener } from '@capacitor-community/file-opener';
 import { usePredmjerFileStore } from '@/store/usePredmjerFileStore';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { FileUpload } from '@/components/shared/FileUpload';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
-  Download, Trash2, Eye, Search, Upload, Loader2,
+  Download, Trash2, Eye, Search, Upload, Loader2, CheckCircle,
   FileSpreadsheet, FileText, Image, FileIcon,
 } from 'lucide-react';
 import { formatDate, formatFileSize } from '@/lib/utils';
@@ -52,6 +53,48 @@ export default function BillOfQuantities() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // File watcher (Electron: auto-save back to Supabase)
+  const [watchingFile, setWatchingFile] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const fileChangeCleanupRef = useRef<(() => void) | null>(null);
+
+  const handleFileChanged = useCallback(async (data: { fileName: string; buffer: ArrayBuffer }) => {
+    const file = files.find(f => f.fileName === data.fileName);
+    if (!file?.filePath) return;
+    setSyncMessage('Sinhronizujem izmjene...');
+    try {
+      const blob = new Blob([data.buffer]);
+      const { error } = await supabase.storage.from('predmjer').update(file.filePath, blob, { upsert: true });
+      if (error) {
+        setSyncMessage('Greška pri sinhronizaciji!');
+      } else {
+        await supabase.from('predmjer_files').update({ file_size: blob.size }).eq('id', file.id);
+        setSyncMessage('Izmjene sačuvane!');
+        if (projectId) loadFiles(projectId);
+      }
+    } catch {
+      setSyncMessage('Greška pri sinhronizaciji!');
+    }
+    setTimeout(() => setSyncMessage(null), 3000);
+  }, [files, projectId, loadFiles]);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.onFileChanged || !watchingFile) return;
+    if (fileChangeCleanupRef.current) fileChangeCleanupRef.current();
+    const cleanup = api.onFileChanged(handleFileChanged);
+    fileChangeCleanupRef.current = cleanup;
+    return () => { cleanup(); fileChangeCleanupRef.current = null; };
+  }, [watchingFile, handleFileChanged]);
+
+  useEffect(() => {
+    return () => {
+      const api = (window as any).electronAPI;
+      if (api?.stopWatching && watchingFile) api.stopWatching(watchingFile);
+      if (fileChangeCleanupRef.current) fileChangeCleanupRef.current();
+    };
+  }, [watchingFile]);
 
   useEffect(() => {
     if (projectId) loadFiles(projectId);
@@ -112,6 +155,32 @@ export default function BillOfQuantities() {
           filePath: saved.uri,
           contentType: mimeTypes[file.fileType] || 'application/octet-stream',
         });
+      } catch (e: any) {
+        setPreviewError(e.message || 'Greška pri otvaranju fajla');
+      }
+      setPreviewLoading(false);
+      setPreviewOpen(false);
+      return;
+    }
+
+    // Electron: open editable files with system app + watch for changes
+    if ((window as any).electronAPI?.isElectron && (file.fileType === 'excel' || file.fileType === 'word')) {
+      try {
+        const blob = await getFile(file.id);
+        if (!blob) { setPreviewLoading(false); setPreviewError('Nije moguće preuzeti fajl'); return; }
+        const buffer = await blob.arrayBuffer();
+        if (watchingFile) await (window as any).electronAPI.stopWatching(watchingFile);
+        const api = (window as any).electronAPI;
+        const result = api.openFileWithWatch
+          ? await api.openFileWithWatch(buffer, file.fileName)
+          : await api.openFileWithSystem(buffer, file.fileName);
+        if (!result.success) {
+          setPreviewError(result.error || 'Greška pri otvaranju fajla');
+        } else if (result.watching) {
+          setWatchingFile(file.fileName);
+          setSyncMessage('Fajl otvoren — izmjene će se automatski sačuvati');
+          setTimeout(() => setSyncMessage(null), 4000);
+        }
       } catch (e: any) {
         setPreviewError(e.message || 'Greška pri otvaranju fajla');
       }
@@ -182,6 +251,17 @@ export default function BillOfQuantities() {
           className="pl-10"
         />
       </div>
+
+      {syncMessage && (
+        <div className="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm flex items-center gap-2">
+          {syncMessage.includes('Sinhronizujem') ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : syncMessage.includes('sačuvane') ? (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : null}
+          {syncMessage}
+        </div>
+      )}
 
       {loading ? (
         <div className="py-12 text-center">
