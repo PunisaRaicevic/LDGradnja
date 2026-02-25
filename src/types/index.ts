@@ -46,6 +46,18 @@ export interface PredmjerFile {
   filePath?: string;
 }
 
+export interface ConstructionLogFile {
+  id: string;
+  projectId: string;
+  name: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  description: string;
+  uploadedAt: string;
+  filePath?: string;
+}
+
 export interface InterimSituation {
   id: string;
   projectId: string;
