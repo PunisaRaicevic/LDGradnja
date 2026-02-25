@@ -163,15 +163,16 @@ export default function BillOfQuantities() {
       return;
     }
 
-    // Electron: open editable files with system app + watch for changes
-    if ((window as any).electronAPI?.isElectron && (file.fileType === 'excel' || file.fileType === 'word')) {
+    // Electron: open all files with system app + watch for editable types
+    if ((window as any).electronAPI?.isElectron) {
       try {
         const blob = await getFile(file.id);
         if (!blob) { setPreviewLoading(false); setPreviewError('Nije moguće preuzeti fajl'); return; }
         const buffer = await blob.arrayBuffer();
-        if (watchingFile) await (window as any).electronAPI.stopWatching(watchingFile);
         const api = (window as any).electronAPI;
-        const result = api.openFileWithWatch
+        const editable = file.fileType === 'excel' || file.fileType === 'word';
+        if (editable && watchingFile) await api.stopWatching(watchingFile);
+        const result = editable && api.openFileWithWatch
           ? await api.openFileWithWatch(buffer, file.fileName)
           : await api.openFileWithSystem(buffer, file.fileName);
         if (!result.success) {
