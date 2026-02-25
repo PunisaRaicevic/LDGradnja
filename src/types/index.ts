@@ -58,6 +58,18 @@ export interface ConstructionLogFile {
   filePath?: string;
 }
 
+export interface SituationFile {
+  id: string;
+  projectId: string;
+  name: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  description: string;
+  uploadedAt: string;
+  filePath?: string;
+}
+
 export interface InterimSituation {
   id: string;
   projectId: string;
