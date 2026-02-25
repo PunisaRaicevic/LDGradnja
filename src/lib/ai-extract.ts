@@ -28,7 +28,18 @@ export async function extractExpenseFromImage(
     mimeType = file.type || 'image/jpeg';
   }
 
-  const response = await fetch('/api/openai/v1/chat/completions', {
+  // On web (Railway): use relative proxy URL
+  // On mobile (Capacitor) / Electron: use full Railway backend URL
+  const isLocalServer = typeof window !== 'undefined'
+    && !window.location.protocol.startsWith('capacitor')
+    && !window.location.protocol.startsWith('ionic')
+    && !(window as any).electronAPI?.isElectron
+    && window.location.hostname !== 'localhost';
+  const apiBase = isLocalServer
+    ? '/api/openai/v1/chat/completions'
+    : 'https://thorough-surprise-production-48bf.up.railway.app/api/openai/v1/chat/completions';
+
+  const response = await fetch(apiBase, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
