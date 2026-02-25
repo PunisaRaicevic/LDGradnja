@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useFinanceStore } from '@/store/useFinanceStore';
 import { useConstructionLogStore } from '@/store/useConstructionLogStore';
-import { useProjectStore } from '@/store/useProjectStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,8 +38,6 @@ export default function ConstructionDiary() {
     loadSituations, addSituation, deleteSituation, updateSituationStatus,
     addSheet, updateSheet, savePositions, loadPositions,
   } = useConstructionLogStore();
-  const { projects } = useProjectStore();
-  const _project = projects.find((p) => p.id === projectId);
 
   const [activeTab, setActiveTab] = useState('tracker');
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
