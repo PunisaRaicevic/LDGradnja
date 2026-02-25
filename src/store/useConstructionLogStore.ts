@@ -57,7 +57,7 @@ function mapPosition(r: any): ConstructionLogPosition {
   };
 }
 
-export const useConstructionLogStore = create<ConstructionLogStore>((set, get) => ({
+export const useConstructionLogStore = create<ConstructionLogStore>((set, _get) => ({
   situations: [], positions: [], loading: false,
 
   loadSituations: async (projectId) => {

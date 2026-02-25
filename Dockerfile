@@ -14,8 +14,17 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install deps in two steps to reduce peak memory usage
+# First: lightweight packages
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]==0.30.0 \
+    python-multipart==0.0.9 \
+    httpx==0.27.0
+
+# Second: heavy packages (ezdxf + matplotlib) separately to avoid OOM
+RUN pip install --no-cache-dir ezdxf==1.4.3
+RUN pip install --no-cache-dir matplotlib==3.9.0
 
 COPY backend/ .
 COPY --from=frontend-build /app/dist ./static

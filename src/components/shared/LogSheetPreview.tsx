@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Check, X, Link, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 interface LogSheetPreviewProps {

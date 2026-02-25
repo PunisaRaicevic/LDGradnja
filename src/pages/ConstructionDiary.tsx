@@ -35,12 +35,12 @@ export default function ConstructionDiary() {
   const { projectId } = useParams();
   const { billItems, loadBillItems } = useFinanceStore();
   const {
-    situations, positions, loading,
+    situations, positions,
     loadSituations, addSituation, deleteSituation, updateSituationStatus,
     addSheet, updateSheet, savePositions, loadPositions,
   } = useConstructionLogStore();
   const { projects } = useProjectStore();
-  const project = projects.find((p) => p.id === projectId);
+  const _project = projects.find((p) => p.id === projectId);
 
   const [activeTab, setActiveTab] = useState('tracker');
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
