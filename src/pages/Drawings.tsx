@@ -114,8 +114,26 @@ export default function Drawings() {
           console.error('[DWG open]', e);
           setPreviewError(e.message || 'Greška pri otvaranju fajla');
         }
+      } else if ((window as any).electronAPI?.isElectron) {
+        // Electron desktop: open DWG with system app (AutoCAD)
+        try {
+          const blob = await getDrawingFile(id);
+          if (!blob) {
+            setPreviewLoading(false);
+            setPreviewError('Nije moguće preuzeti fajl');
+            return;
+          }
+          const fileName = drawing.fileName || `${drawing.name}.dwg`;
+          const buffer = await blob.arrayBuffer();
+          const result = await (window as any).electronAPI.openFileWithSystem(buffer, fileName);
+          if (!result.success) {
+            setPreviewError(result.error || 'Greška pri otvaranju fajla');
+          }
+        } catch (e: any) {
+          setPreviewError(e.message || 'Greška pri otvaranju fajla');
+        }
       } else {
-        // Desktop: download .dwg file — Windows will open it with AutoCAD
+        // Web browser: download .dwg file
         const blob = await getDrawingFile(id);
         if (!blob) {
           setPreviewLoading(false);

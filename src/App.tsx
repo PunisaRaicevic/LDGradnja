@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Layout } from '@/components/layout/Layout';
 import Login from '@/pages/Login';
@@ -33,8 +33,11 @@ function App() {
     );
   }
 
+  const isElectron = !!(window as any).electronAPI?.isElectron;
+  const Router = isElectron ? HashRouter : BrowserRouter;
+
   return (
-    <BrowserRouter>
+    <Router>
       <Routes>
         {!user ? (
           <>
@@ -62,7 +65,7 @@ function App() {
           </Route>
         )}
       </Routes>
-    </BrowserRouter>
+    </Router>
   );
 }
 

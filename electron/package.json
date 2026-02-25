@@ -1,0 +1,8 @@
+{
+  "name": "ldgradnja-desktop",
+  "version": "1.0.0",
+  "description": "LDGradnja - Desktop aplikacija",
+  "main": "main.js",
+  "author": "LDGradnja",
+  "license": "MIT"
+}
