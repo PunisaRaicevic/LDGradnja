@@ -17,11 +17,12 @@ async function downloadFromStorage(filePath: string): Promise<Blob | undefined> 
   if (!session) return undefined;
 
   const encodedPath = filePath.split('/').map(s => encodeURIComponent(s)).join('/');
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/situation-files/${encodedPath}`, {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/authenticated/situation-files/${encodedPath}?t=${Date.now()}`, {
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
       'apikey': SUPABASE_ANON_KEY,
     },
+    cache: 'no-store',
   });
 
   if (!res.ok) return undefined;

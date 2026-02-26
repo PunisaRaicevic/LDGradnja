@@ -46,8 +46,7 @@ export default function Drawings() {
   const fileChangeCleanupRef = useRef<(() => void) | null>(null);
 
   // Handle file change event from Electron watcher
-  const handleFileChanged = useCallback(async (data: { fileName: string; buffer: ArrayBuffer }) => {
-    // Find the drawing by fileName to get its storage path
+  const handleFileChanged = useCallback(async (data: { fileName: string }) => {
     const drawing = drawings.find(d =>
       (d.fileName || `${d.name}.dwg`) === data.fileName
     );
@@ -55,28 +54,24 @@ export default function Drawings() {
 
     setSyncMessage('Sinhronizujem izmjene...');
     try {
-      const blob = new Blob([data.buffer]);
-      const { error } = await supabase.storage.from('drawings')
-        .update(drawing.filePath, blob, { upsert: true });
-
+      const api = (window as any).electronAPI;
+      const result = await api.readTempFile(data.fileName);
+      if (!result.success) { setSyncMessage(`Greška: ${result.error}`); return; }
+      const uint8 = new Uint8Array(result.buffer);
+      const blob = new Blob([uint8], { type: 'application/octet-stream' });
+      setSyncMessage(`Sinhronizujem (${(blob.size / 1024).toFixed(0)} KB)...`);
+      const { error } = await supabase.storage.from('drawings').update(drawing.filePath, blob);
       if (error) {
-        console.error('[file-sync] Upload error:', error);
-        setSyncMessage('Greska pri sinhronizaciji!');
+        setSyncMessage(`Greška: ${error.message}`);
       } else {
-        // Update file size in database
-        await supabase.from('drawings')
-          .update({ file_size: blob.size })
-          .eq('id', drawing.id);
-        setSyncMessage('Izmjene sacuvane!');
-        // Reload drawings to refresh UI
+        await supabase.from('drawings').update({ file_size: blob.size }).eq('id', drawing.id);
+        setSyncMessage('Izmjene sačuvane!');
         if (projectId) loadDrawings(projectId);
       }
     } catch (e: any) {
-      console.error('[file-sync] Error:', e);
-      setSyncMessage('Greska pri sinhronizaciji!');
+      setSyncMessage(`Greška: ${e?.message || 'nepoznata'}`);
     }
-    // Clear message after 3 seconds
-    setTimeout(() => setSyncMessage(null), 3000);
+    setTimeout(() => setSyncMessage(null), 5000);
   }, [drawings, projectId, loadDrawings]);
 
   // Set up file change listener

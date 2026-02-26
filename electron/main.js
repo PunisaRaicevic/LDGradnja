@@ -1,10 +1,17 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { pathToFileURL } = require('url');
 
 let mainWindow;
 const activeWatchers = new Map(); // fileName -> FSWatcher
+
+// Register custom protocol before app is ready
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'app',
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+}]);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -18,9 +25,22 @@ function createWindow() {
     },
   });
 
-  // Load the built React app
-  const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
-  mainWindow.loadFile(indexPath);
+  // Handle custom app:// protocol to serve dist/ files
+  // This makes absolute paths like /assets/index.js work correctly
+  const distDir = path.join(__dirname, '..', 'dist');
+  protocol.handle('app', (request) => {
+    const url = new URL(request.url);
+    let pathname = decodeURIComponent(url.pathname);
+    if (pathname === '/') pathname = '/index.html';
+    const filePath = path.join(distDir, pathname);
+    // If file doesn't exist, serve index.html (SPA client-side routing)
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      return net.fetch(pathToFileURL(path.join(distDir, 'index.html')).toString());
+    }
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
+  mainWindow.loadURL('app://localhost/');
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -62,36 +82,34 @@ ipcMain.handle('open-file-with-watch', async (_event, buffer, fileName) => {
 
     // Stop any existing watcher for this file
     if (activeWatchers.has(fileName)) {
-      activeWatchers.get(fileName).close();
+      activeWatchers.get(fileName).watcher.close();
+      if (activeWatchers.get(fileName).timer) clearTimeout(activeWatchers.get(fileName).timer);
       activeWatchers.delete(fileName);
     }
 
-    // Track original file size/time to detect real changes
-    let lastMtime = fs.statSync(filePath).mtimeMs;
+    // Watch the DIRECTORY for changes (handles Excel's delete+rename save pattern)
+    let debounceTimer = null;
+    const watchDir = path.dirname(filePath);
+    const baseFileName = path.basename(filePath);
 
-    // Watch for changes (AutoCAD saving)
-    const watcher = fs.watch(filePath, { persistent: false }, (eventType) => {
-      if (eventType === 'change') {
+    const watcher = fs.watch(watchDir, { persistent: false }, (eventType, changedFile) => {
+      if (changedFile !== baseFileName) return;
+
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
         try {
-          const stat = fs.statSync(filePath);
-          // Only fire if modification time actually changed
-          if (stat.mtimeMs > lastMtime) {
-            lastMtime = stat.mtimeMs;
-            const newBuffer = fs.readFileSync(filePath);
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('file-changed', {
-                fileName,
-                buffer: newBuffer.buffer.slice(newBuffer.byteOffset, newBuffer.byteOffset + newBuffer.byteLength),
-              });
-            }
+          if (!fs.existsSync(filePath)) return;
+          // Just notify renderer that file changed — renderer will request content
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('file-changed', { fileName });
           }
         } catch (e) {
-          // File might be locked by AutoCAD during save, ignore
+          // ignore
         }
-      }
+      }, 1500);
     });
 
-    activeWatchers.set(fileName, watcher);
+    activeWatchers.set(fileName, { watcher, get timer() { return debounceTimer; } });
 
     // Open with system default app
     const error = await shell.openPath(filePath);
@@ -109,10 +127,24 @@ ipcMain.handle('open-file-with-watch', async (_event, buffer, fileName) => {
 // IPC: Stop watching a file
 ipcMain.handle('stop-watching', async (_event, fileName) => {
   if (activeWatchers.has(fileName)) {
-    activeWatchers.get(fileName).close();
+    const entry = activeWatchers.get(fileName);
+    entry.watcher.close();
+    if (entry.timer) clearTimeout(entry.timer);
     activeWatchers.delete(fileName);
   }
   return { success: true };
+});
+
+// IPC: Read temp file content (for sync back to cloud)
+ipcMain.handle('read-temp-file', async (_event, fileName) => {
+  try {
+    const filePath = path.join(os.tmpdir(), 'ldgradnja', fileName);
+    if (!fs.existsSync(filePath)) return { success: false, error: 'File not found' };
+    const content = fs.readFileSync(filePath);
+    return { success: true, buffer: content };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // IPC: Save file to Downloads folder
@@ -131,8 +163,9 @@ app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
   // Clean up all file watchers
-  for (const [, watcher] of activeWatchers) {
-    watcher.close();
+  for (const [, entry] of activeWatchers) {
+    entry.watcher.close();
+    if (entry.timer) clearTimeout(entry.timer);
   }
   activeWatchers.clear();
   app.quit();

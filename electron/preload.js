@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('file-changed', handler);
   },
 
+  // Read temp file content (for syncing back to cloud)
+  readTempFile: (fileName) => {
+    return ipcRenderer.invoke('read-temp-file', fileName);
+  },
+
   // Stop watching a file
   stopWatching: (fileName) => {
     return ipcRenderer.invoke('stop-watching', fileName);

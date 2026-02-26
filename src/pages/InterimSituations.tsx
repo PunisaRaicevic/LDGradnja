@@ -59,24 +59,29 @@ export default function InterimSituations() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const fileChangeCleanupRef = useRef<(() => void) | null>(null);
 
-  const handleFileChanged = useCallback(async (data: { fileName: string; buffer: ArrayBuffer }) => {
+  const handleFileChanged = useCallback(async (data: { fileName: string }) => {
     const file = files.find(f => f.fileName === data.fileName);
     if (!file?.filePath) return;
     setSyncMessage('Sinhronizujem izmjene...');
     try {
-      const blob = new Blob([data.buffer]);
-      const { error } = await supabase.storage.from('situation-files').update(file.filePath, blob, { upsert: true });
+      const api = (window as any).electronAPI;
+      const result = await api.readTempFile(data.fileName);
+      if (!result.success) { setSyncMessage(`Greška: ${result.error}`); return; }
+      const uint8 = new Uint8Array(result.buffer);
+      const blob = new Blob([uint8], { type: 'application/octet-stream' });
+      setSyncMessage(`Sinhronizujem (${(blob.size / 1024).toFixed(0)} KB)...`);
+      const { error } = await supabase.storage.from('situation-files').update(file.filePath, blob);
       if (error) {
-        setSyncMessage('Greška pri sinhronizaciji!');
+        setSyncMessage(`Greška: ${error.message}`);
       } else {
         await supabase.from('situation_files').update({ file_size: blob.size }).eq('id', file.id);
         setSyncMessage('Izmjene sačuvane!');
         if (projectId) loadFiles(projectId);
       }
-    } catch {
-      setSyncMessage('Greška pri sinhronizaciji!');
+    } catch (e: any) {
+      setSyncMessage(`Greška: ${e?.message || 'nepoznata'}`);
     }
-    setTimeout(() => setSyncMessage(null), 3000);
+    setTimeout(() => setSyncMessage(null), 5000);
   }, [files, projectId, loadFiles]);
 
   useEffect(() => {
