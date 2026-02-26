@@ -8,11 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Search, Trash2, UserPlus, Mail, Phone, Shield, X } from 'lucide-react';
+import { Plus, Search, Trash2, UserPlus, Mail, Phone, Shield, X, User } from 'lucide-react';
 import type { AppUser } from '@/types';
 
 const emptyForm = {
   fullName: '',
+  username: '',
+  password: '',
   email: '',
   phone: '',
   role: 'worker' as 'admin' | 'worker',
@@ -48,18 +50,34 @@ export default function Users() {
 
   const filteredUsers = users.filter((u) =>
     u.fullName.toLowerCase().includes(search.toLowerCase()) ||
+    (u.username || '').toLowerCase().includes(search.toLowerCase()) ||
     u.email.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleCreate = async () => {
-    if (!form.fullName || !form.email) {
-      setFormError('Ime i email su obavezni.');
+    if (!form.fullName || !form.username || !form.password) {
+      setFormError('Ime, korisničko ime i lozinka su obavezni.');
+      return;
+    }
+    if (form.username.length < 3) {
+      setFormError('Korisničko ime mora imati najmanje 3 karaktera.');
+      return;
+    }
+    if (form.password.length < 6) {
+      setFormError('Lozinka mora imati najmanje 6 karaktera.');
       return;
     }
     setSaving(true);
     setFormError('');
     try {
-      await createUser(form);
+      await createUser({
+        username: form.username,
+        password: form.password,
+        fullName: form.fullName,
+        phone: form.phone,
+        role: form.role,
+        email: form.email || undefined,
+      });
       setCreateDialogOpen(false);
       setForm(emptyForm);
     } catch (err: any) {
@@ -73,6 +91,8 @@ export default function Users() {
     setSelectedUser(user);
     setEditForm({
       fullName: user.fullName,
+      username: user.username || '',
+      password: '',
       email: user.email,
       phone: user.phone,
       role: user.role,
@@ -216,10 +236,18 @@ export default function Users() {
                         {user.role === 'admin' ? 'Admin' : 'Radnik'}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
-                      <Mail className="h-3 w-3" />
-                      <span className="truncate">{user.email}</span>
-                    </div>
+                    {user.username && (
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
+                        <User className="h-3 w-3" />
+                        <span className="truncate">{user.username}</span>
+                      </div>
+                    )}
+                    {user.email && (
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground mb-1">
+                        <Mail className="h-3 w-3" />
+                        <span className="truncate">{user.email}</span>
+                      </div>
+                    )}
                     {user.phone && (
                       <div className="flex items-center gap-1 text-sm text-muted-foreground">
                         <Phone className="h-3 w-3" />
@@ -254,7 +282,15 @@ export default function Users() {
               <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} placeholder="Npr. Marko Marković" />
             </div>
             <div>
-              <Label>Email *</Label>
+              <Label>Korisničko ime *</Label>
+              <Input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="Npr. marko" />
+            </div>
+            <div>
+              <Label>Lozinka *</Label>
+              <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Najmanje 6 karaktera" />
+            </div>
+            <div>
+              <Label>Email (opciono)</Label>
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="marko@firma.com" />
             </div>
             <div>
@@ -326,12 +362,19 @@ export default function Users() {
                       {selectedUser.role === 'admin' ? 'Admin' : 'Radnik'}
                     </Badge>
                     {selectedUser.authUserId && (
-                      <Badge variant="success">Registrovan</Badge>
+                      <Badge variant="success">Aktivan</Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Mail className="h-4 w-4" />{selectedUser.email}
-                  </div>
+                  {selectedUser.username && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <User className="h-4 w-4" />Korisničko ime: {selectedUser.username}
+                    </div>
+                  )}
+                  {selectedUser.email && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-4 w-4" />{selectedUser.email}
+                    </div>
+                  )}
                   {selectedUser.phone && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Phone className="h-4 w-4" />{selectedUser.phone}

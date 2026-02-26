@@ -267,6 +267,7 @@ export const UNITS: string[] = [
 export interface AppUser {
   id: string;
   adminId: string;
+  username: string | null;
   email: string;
   fullName: string;
   phone: string;

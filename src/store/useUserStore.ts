@@ -8,7 +8,7 @@ interface UserStore {
   loading: boolean;
 
   loadUsers: () => Promise<void>;
-  createUser: (data: { email: string; fullName: string; phone: string; role: 'admin' | 'worker' }) => Promise<void>;
+  createUser: (data: { username: string; password: string; fullName: string; phone: string; role: 'admin' | 'worker'; email?: string }) => Promise<void>;
   updateUser: (id: string, data: Partial<Pick<AppUser, 'fullName' | 'phone' | 'role' | 'email'>>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
 
@@ -21,7 +21,8 @@ function mapUser(r: any): AppUser {
   return {
     id: r.id,
     adminId: r.admin_id,
-    email: r.email,
+    username: r.username || null,
+    email: r.email || '',
     fullName: r.full_name,
     phone: r.phone || '',
     role: r.role,
@@ -61,12 +62,38 @@ export const useUserStore = create<UserStore>((set) => ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Generate internal email for Supabase Auth (workers may not have real email)
+    const authEmail = data.email || `${data.username}@ldgradnja.local`;
+
+    // 1. Save admin session before creating new user
+    const { data: { session: adminSession } } = await supabase.auth.getSession();
+    if (!adminSession) throw new Error('Admin sesija nije aktivna');
+
+    // 2. Create Supabase Auth account so the user can log in
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: authEmail,
+      password: data.password,
+    });
+
+    if (authError) {
+      throw new Error(authError.message);
+    }
+
+    // 3. Restore admin session (signUp may have switched to new user)
+    await supabase.auth.setSession({
+      access_token: adminSession.access_token,
+      refresh_token: adminSession.refresh_token,
+    });
+
+    // 4. Insert into app_users table with the auth user ID
     const { data: row, error } = await supabase.from('app_users').insert({
       admin_id: user.id,
-      email: data.email,
+      username: data.username,
+      email: data.email || null,
       full_name: data.fullName,
       phone: data.phone,
       role: data.role,
+      auth_user_id: authData.user?.id || null,
     }).select().single();
 
     if (error) {

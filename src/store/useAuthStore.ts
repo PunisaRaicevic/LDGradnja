@@ -8,8 +8,7 @@ interface AuthStore {
   loading: boolean;
   initialized: boolean;
   initialize: () => Promise<void>;
-  login: (email: string, password: string) => Promise<string | null>;
-  register: (email: string, password: string) => Promise<string | null>;
+  login: (identifier: string, password: string) => Promise<string | null>;
   logout: () => Promise<void>;
 }
 
@@ -32,16 +31,13 @@ export const useAuthStore = create<AuthStore>((set) => ({
     });
   },
 
-  login: async (email, password) => {
+  login: async (identifier, password) => {
     set({ loading: true });
+    // If identifier contains @, treat as email; otherwise convert username to internal email
+    const email = identifier.includes('@')
+      ? identifier
+      : `${identifier}@ldgradnja.local`;
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    set({ loading: false });
-    return error?.message ?? null;
-  },
-
-  register: async (email, password) => {
-    set({ loading: true });
-    const { error } = await supabase.auth.signUp({ email, password });
     set({ loading: false });
     return error?.message ?? null;
   },

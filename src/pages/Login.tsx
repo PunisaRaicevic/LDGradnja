@@ -7,20 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2 } from 'lucide-react';
 
 export default function Login() {
-  const { login, register, loading } = useAuthStore();
-  const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('');
+  const { login, loading } = useAuthStore();
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
 
-    if (!email || !password) {
-      setError('Unesite email i lozinku');
+    if (!identifier || !password) {
+      setError('Unesite korisničko ime i lozinku');
       return;
     }
     if (password.length < 6) {
@@ -28,18 +25,9 @@ export default function Login() {
       return;
     }
 
-    if (isRegister) {
-      const err = await register(email, password);
-      if (err) {
-        setError(err);
-      } else {
-        setSuccess('Registracija uspjesna! Provjerite email za potvrdu.');
-      }
-    } else {
-      const err = await login(email, password);
-      if (err) {
-        setError(err);
-      }
+    const err = await login(identifier, password);
+    if (err) {
+      setError('Pogrešno korisničko ime ili lozinka');
     }
   };
 
@@ -60,13 +48,13 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <Label>Email</Label>
+              <Label>Korisničko ime ili email</Label>
               <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="vas@email.com"
-                autoComplete="email"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="marko ili marko@firma.com"
+                autoComplete="username"
               />
             </div>
             <div>
@@ -76,7 +64,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Najmanje 6 karaktera"
-                autoComplete={isRegister ? 'new-password' : 'current-password'}
+                autoComplete="current-password"
               />
             </div>
 
@@ -85,26 +73,11 @@ export default function Login() {
                 {error}
               </div>
             )}
-            {success && (
-              <div className="text-sm text-green-600 bg-green-50 rounded-lg p-3">
-                {success}
-              </div>
-            )}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {isRegister ? 'Registruj se' : 'Prijavi se'}
+              Prijavi se
             </Button>
-
-            <div className="text-center">
-              <button
-                type="button"
-                className="text-sm text-primary hover:underline cursor-pointer"
-                onClick={() => { setIsRegister(!isRegister); setError(null); setSuccess(null); }}
-              >
-                {isRegister ? 'Vec imate nalog? Prijavite se' : 'Nemate nalog? Registrujte se'}
-              </button>
-            </div>
           </form>
         </CardContent>
       </Card>
