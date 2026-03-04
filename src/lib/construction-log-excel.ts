@@ -96,11 +96,11 @@ async function aiParseSheet(
 
   console.log(`[AI Parse] Sheet "${sheetName}": ${sheetText.length} → ${truncated.length} chars`);
 
-  const response = await fetch('/api/openai/v1/chat/completions', {
+  const response = await fetch('/api/gemini/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gemini-2.0-flash',
       messages: [
         {
           role: 'system',

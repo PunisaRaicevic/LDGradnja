@@ -57,14 +57,14 @@ async function validateChunk(
     totalPrice: item.totalPrice,
   }));
 
-  const response = await fetch('/api/openai/v1/chat/completions', {
+  const response = await fetch('/api/gemini/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gemini-2.0-flash',
       messages: [
         {
           role: 'system',
@@ -103,7 +103,7 @@ Budi konzervativan - prijavi samo stvarne probleme, ne lažne pozitive.`,
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `OpenAI API greška: ${response.status}`);
+    throw new Error(error.error?.message || `Gemini API greška: ${response.status}`);
   }
 
   const data = await response.json();

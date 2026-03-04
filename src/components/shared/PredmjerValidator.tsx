@@ -48,7 +48,7 @@ type FilterCategory = 'all' | 'math' | 'missing_data' | 'structure' | 'semantic'
 type FilterSeverity = 'all' | 'error' | 'warning' | 'info';
 
 export default function PredmjerValidator({ items, onApplyFixes }: PredmjerValidatorProps) {
-  const { openaiApiKey } = useSettingsStore();
+  const { geminiApiKey } = useSettingsStore();
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
@@ -84,7 +84,7 @@ export default function PredmjerValidator({ items, onApplyFixes }: PredmjerValid
   };
 
   const handleRunAI = async () => {
-    const apiKey = openaiApiKey || prompt('Unesite OpenAI API ključ:');
+    const apiKey = geminiApiKey || prompt('Unesite Gemini API ključ:');
     if (!apiKey) return;
 
     setAiRunning(true);

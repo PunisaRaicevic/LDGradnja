@@ -36,8 +36,8 @@ export async function extractExpenseFromImage(
     && !(window as any).electronAPI?.isElectron
     && window.location.hostname !== 'localhost';
   const apiBase = isLocalServer
-    ? '/api/openai/v1/chat/completions'
-    : 'https://thorough-surprise-production-48bf.up.railway.app/api/openai/v1/chat/completions';
+    ? '/api/gemini/v1/chat/completions'
+    : 'https://thorough-surprise-production-48bf.up.railway.app/api/gemini/v1/chat/completions';
 
   const response = await fetch(apiBase, {
     method: 'POST',
@@ -45,7 +45,7 @@ export async function extractExpenseFromImage(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gemini-2.0-flash',
       messages: [
         {
           role: 'system',
@@ -117,7 +117,7 @@ Pravila:
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `OpenAI API greška: ${response.status}`);
+    throw new Error(error.error?.message || `Gemini API greška: ${response.status}`);
   }
 
   const data = await response.json();

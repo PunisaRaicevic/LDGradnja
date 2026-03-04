@@ -128,14 +128,14 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
             raise HTTPException(500, f"SVG konverzija nije uspjela: {str(e)}")
 
 
-@app.api_route("/api/openai/{path:path}", methods=["POST", "GET"])
-async def openai_proxy(path: str, request: Request):
-    """Proxy requests to OpenAI API using server-side API key."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+@app.api_route("/api/gemini/{path:path}", methods=["POST", "GET"])
+async def gemini_proxy(path: str, request: Request):
+    """Proxy requests to Gemini API (OpenAI-compatible endpoint) using server-side API key."""
+    api_key = os.environ.get("GEMINI_API_KEY", "")
     # Fallback: allow client to pass key (for local dev without env var)
     auth = f"Bearer {api_key}" if api_key else request.headers.get("Authorization", "")
     if not auth:
-        raise HTTPException(401, "OpenAI API key not configured. Set OPENAI_API_KEY environment variable.")
+        raise HTTPException(401, "Gemini API key not configured. Set GEMINI_API_KEY environment variable.")
 
     body = await request.body()
     headers = {
@@ -147,7 +147,7 @@ async def openai_proxy(path: str, request: Request):
         try:
             resp = await client.request(
                 method=request.method,
-                url=f"https://api.openai.com/{path}",
+                url=f"https://generativelanguage.googleapis.com/v1beta/openai/{path}",
                 headers=headers,
                 content=body,
             )
@@ -157,9 +157,9 @@ async def openai_proxy(path: str, request: Request):
                 media_type=resp.headers.get("content-type", "application/json"),
             )
         except httpx.TimeoutException:
-            raise HTTPException(504, "OpenAI API timeout")
+            raise HTTPException(504, "Gemini API timeout")
         except httpx.RequestError as e:
-            raise HTTPException(502, f"OpenAI API nedostupan: {str(e)}")
+            raise HTTPException(502, f"Gemini API nedostupan: {str(e)}")
 
 
 # Serve frontend static files (JS, CSS, images, etc.)

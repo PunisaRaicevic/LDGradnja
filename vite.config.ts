@@ -16,13 +16,13 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
-        '/api/openai': {
-          target: 'https://api.openai.com',
+        '/api/gemini': {
+          target: 'https://generativelanguage.googleapis.com/v1beta/openai',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/openai/, ''),
+          rewrite: (path) => path.replace(/^\/api\/gemini/, ''),
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
-              const apiKey = env.VITE_OPENAI_API_KEY
+              const apiKey = env.VITE_GEMINI_API_KEY
               if (apiKey) {
                 proxyReq.setHeader('Authorization', `Bearer ${apiKey}`)
               }

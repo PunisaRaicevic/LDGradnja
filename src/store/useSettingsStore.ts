@@ -1,20 +1,20 @@
 import { create } from 'zustand';
 
 interface SettingsStore {
-  openaiApiKey: string;
+  geminiApiKey: string;
   backendUrl: string;
-  setOpenaiApiKey: (key: string) => void;
+  setGeminiApiKey: (key: string) => void;
   setBackendUrl: (url: string) => void;
   loadSettings: () => void;
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
-  openaiApiKey: '',
+  geminiApiKey: '',
   backendUrl: '',
 
-  setOpenaiApiKey: (key) => {
-    localStorage.setItem('ldgradnja_openai_key', key);
-    set({ openaiApiKey: key });
+  setGeminiApiKey: (key) => {
+    localStorage.setItem('ldgradnja_gemini_key', key);
+    set({ geminiApiKey: key });
   },
 
   setBackendUrl: (url) => {
@@ -24,8 +24,8 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   },
 
   loadSettings: () => {
-    const key = localStorage.getItem('ldgradnja_openai_key') || '';
+    const key = localStorage.getItem('ldgradnja_gemini_key') || '';
     const backendUrl = localStorage.getItem('ldgradnja_backend_url') || '';
-    set({ openaiApiKey: key, backendUrl });
+    set({ geminiApiKey: key, backendUrl });
   },
 }));
