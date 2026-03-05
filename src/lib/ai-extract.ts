@@ -24,8 +24,9 @@ export async function extractExpenseFromImage(
     base64 = await pdfToBase64Image(file);
     mimeType = 'image/png';
   } else {
-    base64 = await fileToBase64(file);
-    mimeType = file.type || 'image/jpeg';
+    // Compress image to reduce payload size (especially important on mobile)
+    base64 = await compressImageToBase64(file);
+    mimeType = 'image/jpeg';
   }
 
   // On web (Railway): use relative proxy URL
@@ -36,10 +37,12 @@ export async function extractExpenseFromImage(
     && !(window as any).electronAPI?.isElectron
     && window.location.hostname !== 'localhost';
   const apiBase = isLocalServer
-    ? '/api/gemini/v1/chat/completions'
-    : 'https://thorough-surprise-production-48bf.up.railway.app/api/gemini/v1/chat/completions';
+    ? '/api/gemini/chat/completions'
+    : 'https://thorough-surprise-production-48bf.up.railway.app/api/gemini/chat/completions';
 
-  const response = await fetch(apiBase, {
+  let response: Response;
+  try {
+    response = await fetch(apiBase, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -114,6 +117,9 @@ Pravila:
       temperature: 0.1,
     }),
   });
+  } catch (err: any) {
+    throw new Error(`Greška pri slanju zahtjeva: ${err.message}. Provjerite internet konekciju.`);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -181,16 +187,33 @@ Pravila:
   }
 }
 
-function fileToBase64(file: File): Promise<string> {
+function compressImageToBase64(file: File, maxWidth = 1600, quality = 0.8): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // Remove data URL prefix
-      const base64 = result.split(',')[1];
-      resolve(base64);
-    };
     reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Greška pri učitavanju slike'));
+      img.onload = () => {
+        // Scale down if larger than maxWidth
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.src = reader.result as string;
+    };
     reader.readAsDataURL(file);
   });
 }

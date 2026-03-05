@@ -57,7 +57,7 @@ async function validateChunk(
     totalPrice: item.totalPrice,
   }));
 
-  const response = await fetch('/api/gemini/v1/chat/completions', {
+  const response = await fetch('/api/gemini/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

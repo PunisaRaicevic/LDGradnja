@@ -111,7 +111,7 @@ async function aiParseChunk(
 
   console.log(`[AI Predmjer] ${label}: ${chunkText.length} chars`);
 
-  const response = await fetch('/api/gemini/v1/chat/completions', {
+  const response = await fetch('/api/gemini/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

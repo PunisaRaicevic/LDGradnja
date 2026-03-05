@@ -118,7 +118,7 @@ export async function parseConstructionLogPDF(
     },
   }));
 
-  const response = await fetch('/api/gemini/v1/chat/completions', {
+  const response = await fetch('/api/gemini/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

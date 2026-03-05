@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         '/api/gemini': {
           target: 'https://generativelanguage.googleapis.com/v1beta/openai',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/gemini/, ''),
+          rewrite: (p) => p.replace(/^\/api\/gemini/, ''),
           configure: (proxy) => {
             proxy.on('proxyReq', (proxyReq) => {
               const apiKey = env.VITE_GEMINI_API_KEY
