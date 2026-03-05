@@ -129,10 +129,19 @@ Pravila:
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
 
-  // Parse JSON from response - handle possible markdown wrapping
+  // Parse JSON from response - extract JSON object from any surrounding text
   let jsonStr = content.trim();
-  if (jsonStr.startsWith('```')) {
-    jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  // Remove markdown code block wrapping
+  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+  // If still not valid JSON, try to find JSON object in the text
+  if (!jsonStr.startsWith('{')) {
+    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[0];
+    }
   }
 
   try {
