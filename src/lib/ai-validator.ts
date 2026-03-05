@@ -64,7 +64,7 @@ async function validateChunk(
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       messages: [
         {
           role: 'system',
