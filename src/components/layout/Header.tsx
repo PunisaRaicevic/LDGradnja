@@ -1,5 +1,5 @@
-import { useLocation, Link } from 'react-router-dom';
-import { ChevronRight, Home, Menu } from 'lucide-react';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, Home, Menu } from 'lucide-react';
 import { useProjectStore } from '@/store/useProjectStore';
 
 interface HeaderProps {
@@ -8,22 +8,49 @@ interface HeaderProps {
 
 export function Header({ onMobileMenuToggle }: HeaderProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { projects } = useProjectStore();
   const pathParts = location.pathname.split('/').filter(Boolean);
 
   const breadcrumbs = buildBreadcrumbs(pathParts, projects);
 
+  // Show back button when not on home page
+  const showBack = pathParts.length > 0;
+
+  const handleBack = () => {
+    // Navigate to parent path
+    if (pathParts.length >= 3) {
+      // e.g. /projects/:id/expenses -> /projects/:id
+      navigate(`/${pathParts.slice(0, 2).join('/')}`);
+    } else if (pathParts.length === 2) {
+      // e.g. /projects/:id -> /projects
+      navigate(`/${pathParts[0]}`);
+    } else {
+      navigate('/');
+    }
+  };
+
   return (
     <header className="h-14 border-b bg-white flex items-center px-3 lg:px-6 sticky top-0 z-10">
-      {/* Mobile hamburger */}
-      <button
-        onClick={onMobileMenuToggle}
-        className="p-2 -ml-1 mr-2 rounded-md hover:bg-muted lg:hidden cursor-pointer"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
+      {/* Mobile: back button + hamburger */}
+      <div className="flex items-center lg:hidden">
+        {showBack && (
+          <button
+            onClick={handleBack}
+            className="p-2 -ml-1 mr-1 rounded-md hover:bg-muted cursor-pointer"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
+        <button
+          onClick={onMobileMenuToggle}
+          className="p-2 rounded-md hover:bg-muted cursor-pointer"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </div>
 
-      <nav className="flex items-center gap-1 text-sm overflow-x-auto">
+      <nav className="flex items-center gap-1 text-sm overflow-x-auto ml-2 lg:ml-0">
         <Link to="/" className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
           <Home className="h-4 w-4" />
         </Link>

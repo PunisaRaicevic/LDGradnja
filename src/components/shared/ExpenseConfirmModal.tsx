@@ -104,16 +104,16 @@ export default function ExpenseConfirmModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onClose={onCancel} className="max-w-4xl max-h-[90vh] overflow-hidden p-0">
-        {/* Header - matching invoice-app pattern */}
-        <div className="flex items-center justify-between p-6 border-b">
+      <DialogContent onClose={onCancel} className="max-w-4xl max-h-[100dvh] sm:max-h-[90vh] overflow-hidden p-0 flex flex-col rounded-none sm:rounded-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
               <CheckCircle className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Potvrdi podatke fakture</h2>
-              <p className="text-sm text-muted-foreground">
+              <h2 className="text-lg sm:text-xl font-bold">Potvrdi podatke fakture</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Provjeri izvučene podatke i potvrdi ako su tačni
               </p>
             </div>
@@ -127,10 +127,10 @@ export default function ExpenseConfirmModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left: Invoice Preview - matching invoice-app */}
-            <div>
+            {/* Left: Invoice Preview - hidden on mobile, shown on desktop */}
+            <div className="hidden lg:block">
               <h3 className="font-semibold mb-3">Originalna faktura</h3>
               <div className="border rounded-xl overflow-hidden bg-muted/30">
                 {previewUrl ? (
@@ -341,17 +341,15 @@ export default function ExpenseConfirmModal({
           </div>
         </div>
 
-        {/* Footer - matching invoice-app */}
-        <div className="flex items-center justify-between p-6 border-t bg-muted/30">
+        {/* Footer */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-t bg-muted/30 shrink-0">
           <Button variant="outline" onClick={onCancel}>
             Zatvori
           </Button>
-          <div className="flex gap-3">
-            <Button onClick={handleConfirm} disabled={isEditing || isSaving}>
-              <CheckCircle size={16} className="mr-2" />
-              Potvrdi podatke
-            </Button>
-          </div>
+          <Button onClick={handleConfirm} disabled={isEditing || isSaving}>
+            <CheckCircle size={16} className="mr-2" />
+            Potvrdi podatke
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
