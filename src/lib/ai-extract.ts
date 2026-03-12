@@ -59,7 +59,8 @@ export async function extractExpenseFromImage(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'gemini-2.5-flash-lite',
+      // Use stronger model for multi-page PDFs, lite for single images
+      model: imageContents.length > 1 ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite',
       messages: [
         {
           role: 'system',
@@ -105,7 +106,9 @@ Pravila:
 - invoiceNumber je broj fakture/računa
 - vendorTaxId je PIB ili identifikacioni broj dobavljača
 - dueDate je rok plaćanja ako postoji
-- Sve tekstove piši na jeziku koji je na računu`
+- Sve tekstove piši na jeziku koji je na računu
+- VAŽNO: Ako dokument ima više stranica, moraš pročitati SVE stranice i izvući SVE stavke. Nemoj se zaustaviti na prvoj stranici!
+- totalAmount treba biti UKUPAN iznos sa PDV-om sa POSLJEDNJE stranice (sumarna linija)`
         },
         {
           role: 'user',
@@ -113,14 +116,15 @@ Pravila:
             {
               type: 'text',
               text: imageContents.length > 1
-                ? `Ovo je faktura/račun sa ${imageContents.length} stranica. Analiziraj SVE stranice zajedno i izvuci kompletne podatke. Vrati samo JSON.`
+                ? `Ovo je faktura/račun sa ${imageContents.length} stranica. OBAVEZNO analiziraj SVE ${imageContents.length} stranice i izvuci SVE stavke sa SVIH stranica. Ukupan iznos (totalAmount) uzmi sa posljednje stranice. Vrati samo JSON.`
                 : 'Izvuci podatke sa ovog računa/fakture. Vrati samo JSON.'
             },
             ...imageContents,
           ]
         }
       ],
-      max_tokens: 4000,
+      // More tokens for multi-page docs with many items
+      max_tokens: imageContents.length > 1 ? 8000 : 4000,
       temperature: 0.1,
     }),
   });
