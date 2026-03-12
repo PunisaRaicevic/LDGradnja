@@ -4,8 +4,9 @@ import tempfile
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import httpx
 
 app = FastAPI(title="LDGradnja Backend", version="1.0.0")
@@ -164,21 +165,23 @@ async def gemini_proxy(path: str, request: Request):
 
 # Serve frontend static files (JS, CSS, images, etc.)
 if STATIC_DIR.is_dir():
-    # Mount assets directory if it exists
+    # SPA fallback: serve index.html for non-API 404s via exception handler
+    # This avoids the catch-all route that was blocking API POST requests with 405
+    @app.exception_handler(404)
+    async def spa_fallback(request: Request, exc: StarletteHTTPException):
+        # Only serve SPA for GET requests to non-API paths
+        if request.method == "GET" and not request.url.path.startswith("/api/"):
+            # Serve actual static file if it exists
+            file_path = STATIC_DIR / request.url.path.lstrip("/")
+            if file_path.is_file():
+                return FileResponse(str(file_path))
+            # Otherwise serve index.html for SPA client-side routing
+            index = STATIC_DIR / "index.html"
+            if index.is_file():
+                return FileResponse(str(index))
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+    # Mount assets directory for JS/CSS bundles
     assets_dir = STATIC_DIR / "assets"
     if assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        """Serve index.html for all non-API routes (SPA client-side routing)."""
-        # Skip API and backend routes — let FastAPI handle them
-        if full_path.startswith("api/") or full_path in ("health", "convert/dwg-to-dxf", "convert/dwg-to-svg"):
-            raise HTTPException(404, "Not found")
-        file_path = STATIC_DIR / full_path
-        if file_path.is_file():
-            return FileResponse(str(file_path))
-        index = STATIC_DIR / "index.html"
-        if index.is_file():
-            return FileResponse(str(index))
-        return {"error": "Frontend not built"}
