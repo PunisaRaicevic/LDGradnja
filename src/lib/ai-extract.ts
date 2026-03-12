@@ -16,17 +16,28 @@ export interface ExtractedExpense {
 export async function extractExpenseFromImage(
   file: File
 ): Promise<ExtractedExpense> {
-  let base64: string;
-  let mimeType: string;
+  let imageContents: { type: 'image_url'; image_url: { url: string; detail: string } }[] = [];
 
   if (file.type === 'application/pdf') {
-    // Convert PDF first page to image
-    base64 = await pdfToBase64Image(file);
-    mimeType = 'image/png';
+    // Convert ALL PDF pages to images
+    const pages = await pdfToBase64Images(file);
+    imageContents = pages.map((pageBase64) => ({
+      type: 'image_url' as const,
+      image_url: {
+        url: `data:image/png;base64,${pageBase64}`,
+        detail: 'high',
+      },
+    }));
   } else {
     // Compress image to reduce payload size (especially important on mobile)
-    base64 = await compressImageToBase64(file);
-    mimeType = 'image/jpeg';
+    const base64 = await compressImageToBase64(file);
+    imageContents = [{
+      type: 'image_url' as const,
+      image_url: {
+        url: `data:image/jpeg;base64,${base64}`,
+        detail: 'high',
+      },
+    }];
   }
 
   // On web (Railway): use relative proxy URL
@@ -101,19 +112,15 @@ Pravila:
           content: [
             {
               type: 'text',
-              text: 'Izvuci podatke sa ovog računa/fakture. Vrati samo JSON.'
+              text: imageContents.length > 1
+                ? `Ovo je faktura/račun sa ${imageContents.length} stranica. Analiziraj SVE stranice zajedno i izvuci kompletne podatke. Vrati samo JSON.`
+                : 'Izvuci podatke sa ovog računa/fakture. Vrati samo JSON.'
             },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${mimeType};base64,${base64}`,
-                detail: 'high'
-              }
-            }
+            ...imageContents,
           ]
         }
       ],
-      max_tokens: 2000,
+      max_tokens: 4000,
       temperature: 0.1,
     }),
   });
@@ -227,7 +234,7 @@ function compressImageToBase64(file: File, maxWidth = 1600, quality = 0.8): Prom
   });
 }
 
-async function pdfToBase64Image(file: File): Promise<string> {
+async function pdfToBase64Images(file: File, maxPages = 10): Promise<string[]> {
   const pdfjsLib = await import('pdfjs-dist');
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -236,19 +243,26 @@ async function pdfToBase64Image(file: File): Promise<string> {
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const page = await pdf.getPage(1);
+  const numPages = Math.min(pdf.numPages, maxPages);
 
-  // Render at 2x scale for better OCR quality
-  const scale = 2;
-  const viewport = page.getViewport({ scale });
+  const pages: string[] = [];
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdf.getPage(i);
 
-  const canvas = document.createElement('canvas');
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const ctx = canvas.getContext('2d')!;
+    // Render at 2x scale for better OCR quality
+    const scale = 2;
+    const viewport = page.getViewport({ scale });
 
-  await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d')!;
 
-  const dataUrl = canvas.toDataURL('image/png');
-  return dataUrl.split(',')[1];
+    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+
+    const dataUrl = canvas.toDataURL('image/png');
+    pages.push(dataUrl.split(',')[1]);
+  }
+
+  return pages;
 }
