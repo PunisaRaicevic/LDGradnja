@@ -24,7 +24,7 @@ export async function extractExpenseFromImage(
     imageContents = pages.map((pageBase64) => ({
       type: 'image_url' as const,
       image_url: {
-        url: `data:image/png;base64,${pageBase64}`,
+        url: `data:image/jpeg;base64,${pageBase64}`,
         detail: 'high',
       },
     }));
@@ -249,18 +249,22 @@ async function pdfToBase64Images(file: File, maxPages = 10): Promise<string[]> {
   for (let i = 1; i <= numPages; i++) {
     const page = await pdf.getPage(i);
 
-    // Render at 2x scale for better OCR quality
-    const scale = 2;
+    // Use 1.5x scale (balance between quality and size) - JPEG compression reduces payload
+    const scale = 1.5;
     const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d')!;
+    // White background (JPEG has no transparency)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
 
-    const dataUrl = canvas.toDataURL('image/png');
+    // Use JPEG at 0.7 quality instead of PNG to drastically reduce size
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
     pages.push(dataUrl.split(',')[1]);
   }
 
