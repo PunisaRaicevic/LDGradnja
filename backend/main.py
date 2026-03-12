@@ -172,6 +172,9 @@ if STATIC_DIR.is_dir():
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve index.html for all non-API routes (SPA client-side routing)."""
+        # Skip API and backend routes — let FastAPI handle them
+        if full_path.startswith("api/") or full_path in ("health", "convert/dwg-to-dxf", "convert/dwg-to-svg"):
+            raise HTTPException(404, "Not found")
         file_path = STATIC_DIR / full_path
         if file_path.is_file():
             return FileResponse(str(file_path))
