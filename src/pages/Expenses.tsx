@@ -79,6 +79,10 @@ export default function Expenses() {
   const [editForm, setEditForm] = useState(emptyForm);
 
   // Report dialog
+  // Delete confirmation
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+
   const [reportOpen, setReportOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState<ReportFilters>({});
 
@@ -469,7 +473,7 @@ export default function Expenses() {
                         <Button variant="ghost" size="icon" onClick={() => handleEditOpen(expense)} title="Uredi">
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteExpense(expense.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => { setDeleteConfirmId(expense.id); setDeleteConfirmName(expense.supplier || expense.description); }}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
@@ -528,7 +532,7 @@ export default function Expenses() {
                     <Button variant="ghost" size="sm" onClick={() => handleEditOpen(expense)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Uredi
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => deleteExpense(expense.id)}>
+                    <Button variant="ghost" size="sm" onClick={() => { setDeleteConfirmId(expense.id); setDeleteConfirmName(expense.supplier || expense.description); }}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
                   </div>
@@ -648,6 +652,24 @@ export default function Expenses() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Otkaži</Button>
             <Button onClick={handleEditSave}>Sačuvaj</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+        <DialogContent onClose={() => setDeleteConfirmId(null)} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Brisanje troška</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Da li ste sigurni da želite obrisati trošak <strong>{deleteConfirmName}</strong>? Ova akcija se ne može poništiti.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Otkaži</Button>
+            <Button variant="destructive" onClick={() => { if (deleteConfirmId) deleteExpense(deleteConfirmId); setDeleteConfirmId(null); }}>
+              <Trash2 className="h-4 w-4 mr-1" /> Obriši
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
