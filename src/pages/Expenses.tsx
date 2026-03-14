@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import {
   Plus, Search, Trash2, Receipt, Eye, Bot, Loader2,
-  CheckCircle, Sparkles, AlertCircle,
+  CheckCircle, Sparkles, AlertCircle, Pencil,
   FileSpreadsheet, FileText, Download, Upload, Bell, X,
   DollarSign, Clock, FileText as FileIcon,
 } from 'lucide-react';
@@ -44,7 +44,7 @@ const emptyForm = {
 
 export default function Expenses() {
   const { projectId } = useParams();
-  const { expenses, loadExpenses, addExpense, deleteExpense, confirmExpense } = useExpenseStore();
+  const { expenses, loadExpenses, addExpense, updateExpense, deleteExpense, confirmExpense } = useExpenseStore();
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -73,6 +73,11 @@ export default function Expenses() {
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const [detailPreviewUrl, setDetailPreviewUrl] = useState<string | null>(null);
 
+  // Edit modal
+  const [editOpen, setEditOpen] = useState(false);
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [editForm, setEditForm] = useState(emptyForm);
+
   // Report dialog
   const [reportOpen, setReportOpen] = useState(false);
   const [reportFilters, setReportFilters] = useState<ReportFilters>({});
@@ -100,6 +105,28 @@ export default function Expenses() {
     setDialogOpen(false);
     setForm(emptyForm);
     setReceiptFile(undefined);
+  };
+
+  const handleEditOpen = (expense: Expense) => {
+    setEditExpense(expense);
+    setEditForm({
+      date: expense.date,
+      supplier: expense.supplier,
+      description: expense.description,
+      quantity: expense.quantity,
+      price: expense.price,
+      totalAmount: expense.totalAmount,
+      category: expense.category as ExpenseCategory,
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editExpense || !editForm.description) return;
+    const totalAmount = editForm.quantity * editForm.price;
+    await updateExpense(editExpense.id, { ...editForm, totalAmount });
+    setEditOpen(false);
+    setEditExpense(null);
   };
 
   const handleReceiptPreview = async (expense: Expense) => {
@@ -439,6 +466,9 @@ export default function Expenses() {
                             <CheckCircle className="h-4 w-4 text-green-600" />
                           </Button>
                         )}
+                        <Button variant="ghost" size="icon" onClick={() => handleEditOpen(expense)} title="Uredi">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => deleteExpense(expense.id)}>
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -495,6 +525,9 @@ export default function Expenses() {
                         <CheckCircle className="h-3.5 w-3.5 mr-1 text-green-600" /> Potvrdi
                       </Button>
                     )}
+                    <Button variant="ghost" size="sm" onClick={() => handleEditOpen(expense)}>
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Uredi
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => deleteExpense(expense.id)}>
                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
                     </Button>
@@ -564,6 +597,57 @@ export default function Expenses() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Otkaži</Button>
             <Button onClick={handleSave}>Dodaj</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Expense Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent onClose={() => setEditOpen(false)} className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Uredi trošak</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Datum</Label>
+                <Input type="date" value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} />
+              </div>
+              <div>
+                <Label>Kategorija</Label>
+                <Select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value as ExpenseCategory })}>
+                  {EXPENSE_CATEGORIES.map((cat) => (
+                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Dobavljač</Label>
+              <Input value={editForm.supplier} onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })} />
+            </div>
+            <div>
+              <Label>Opis stavke *</Label>
+              <Textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Količina</Label>
+                <Input type="number" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <Label>Cijena</Label>
+                <Input type="number" step="0.01" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <Label>Ukupno</Label>
+                <Input value={formatCurrency(editForm.quantity * editForm.price)} readOnly className="bg-muted" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Otkaži</Button>
+            <Button onClick={handleEditSave}>Sačuvaj</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
