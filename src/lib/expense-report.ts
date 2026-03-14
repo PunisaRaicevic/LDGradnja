@@ -20,7 +20,39 @@ function applyFilters(expenses: Expense[], filters: ReportFilters): Expense[] {
   });
 }
 
-export function exportExpensesExcel(expenses: Expense[], filters: ReportFilters) {
+function isCapacitor(): boolean {
+  return typeof window !== 'undefined' &&
+    (window.location.protocol.startsWith('capacitor') ||
+     window.location.protocol.startsWith('ionic') ||
+     (window.location.protocol === 'https:' && window.location.hostname === 'localhost'));
+}
+
+async function saveFileOnMobile(base64Data: string, fileName: string, mimeType: string) {
+  const { Filesystem, Directory } = await import('@capacitor/filesystem');
+  const { FileOpener } = await import('@capacitor-community/file-opener');
+
+  const result = await Filesystem.writeFile({
+    path: fileName,
+    data: base64Data,
+    directory: Directory.Cache,
+  });
+
+  await FileOpener.open({
+    filePath: result.uri,
+    contentType: mimeType,
+  });
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+export async function exportExpensesExcel(expenses: Expense[], filters: ReportFilters) {
   const filtered = applyFilters(expenses, filters);
 
   const rows = filtered.map((e) => ({
@@ -80,10 +112,17 @@ export function exportExpensesExcel(expenses: Expense[], filters: ReportFilters)
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Troškovi');
-  XLSX.writeFile(workbook, 'troskovi-izvjestaj.xlsx');
+
+  if (isCapacitor()) {
+    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const base64 = arrayBufferToBase64(buffer);
+    await saveFileOnMobile(base64, 'troskovi-izvjestaj.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  } else {
+    XLSX.writeFile(workbook, 'troskovi-izvjestaj.xlsx');
+  }
 }
 
-export function exportExpensesPDF(expenses: Expense[], filters: ReportFilters, projectName?: string) {
+export async function exportExpensesPDF(expenses: Expense[], filters: ReportFilters, projectName?: string) {
   const filtered = applyFilters(expenses, filters);
   const doc = new jsPDF({ orientation: 'landscape' });
 
@@ -147,5 +186,10 @@ export function exportExpensesPDF(expenses: Expense[], filters: ReportFilters, p
   doc.text(`UKUPNO: ${formatCurrency(totalAmount)}`, 14, finalY + 12);
   doc.text(`PDV: ${formatCurrency(totalTax)}`, 14, finalY + 19);
 
-  doc.save('troskovi-izvjestaj.pdf');
+  if (isCapacitor()) {
+    const base64 = doc.output('datauristring').split(',')[1];
+    await saveFileOnMobile(base64, 'troskovi-izvjestaj.pdf', 'application/pdf');
+  } else {
+    doc.save('troskovi-izvjestaj.pdf');
+  }
 }

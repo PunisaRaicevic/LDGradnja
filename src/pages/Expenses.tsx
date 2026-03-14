@@ -260,13 +260,13 @@ export default function Expenses() {
     setAiScanOpen(true);
   };
 
-  const handleExportExcel = () => {
-    exportExpensesExcel(expenses, reportFilters);
+  const handleExportExcel = async () => {
+    await exportExpensesExcel(expenses, reportFilters);
     setReportOpen(false);
   };
 
-  const handleExportPDF = () => {
-    exportExpensesPDF(expenses, reportFilters);
+  const handleExportPDF = async () => {
+    await exportExpensesPDF(expenses, reportFilters);
     setReportOpen(false);
   };
 
