@@ -40,6 +40,10 @@ const emptyForm = {
   price: 0,
   totalAmount: 0,
   category: 'materijal' as ExpenseCategory,
+  invoiceNumber: '',
+  vendorTaxId: '',
+  dueDate: '',
+  taxAmount: 0,
 };
 
 export default function Expenses() {
@@ -121,6 +125,10 @@ export default function Expenses() {
       price: expense.price,
       totalAmount: expense.totalAmount,
       category: expense.category as ExpenseCategory,
+      invoiceNumber: expense.invoiceNumber || '',
+      vendorTaxId: expense.vendorTaxId || '',
+      dueDate: expense.dueDate || '',
+      taxAmount: expense.taxAmount || 0,
     });
     setEditOpen(true);
   };
@@ -128,7 +136,14 @@ export default function Expenses() {
   const handleEditSave = async () => {
     if (!editExpense || !editForm.description) return;
     const totalAmount = editForm.quantity * editForm.price;
-    await updateExpense(editExpense.id, { ...editForm, totalAmount });
+    await updateExpense(editExpense.id, {
+      ...editForm,
+      totalAmount,
+      taxAmount: editForm.taxAmount,
+      invoiceNumber: editForm.invoiceNumber,
+      vendorTaxId: editForm.vendorTaxId,
+      dueDate: editForm.dueDate,
+    });
     setEditOpen(false);
     setEditExpense(null);
   };
@@ -607,7 +622,7 @@ export default function Expenses() {
 
       {/* Edit Expense Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent onClose={() => setEditOpen(false)} className="max-w-lg">
+        <DialogContent onClose={() => setEditOpen(false)} className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Uredi trošak</DialogTitle>
           </DialogHeader>
@@ -626,15 +641,31 @@ export default function Expenses() {
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Dobavljač</Label>
-              <Input value={editForm.supplier} onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })} />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Broj fakture</Label>
+                <Input value={editForm.invoiceNumber} onChange={(e) => setEditForm({ ...editForm, invoiceNumber: e.target.value })} />
+              </div>
+              <div>
+                <Label>Rok plaćanja</Label>
+                <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Dobavljač</Label>
+                <Input value={editForm.supplier} onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })} />
+              </div>
+              <div>
+                <Label>PIB</Label>
+                <Input value={editForm.vendorTaxId} onChange={(e) => setEditForm({ ...editForm, vendorTaxId: e.target.value })} />
+              </div>
             </div>
             <div>
-              <Label>Opis stavke *</Label>
+              <Label>Opis / Napomena *</Label>
               <Textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <Label>Količina</Label>
                 <Input type="number" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: parseFloat(e.target.value) || 0 })} />
@@ -642,6 +673,10 @@ export default function Expenses() {
               <div>
                 <Label>Cijena</Label>
                 <Input type="number" step="0.01" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })} />
+              </div>
+              <div>
+                <Label>PDV</Label>
+                <Input type="number" step="0.01" value={editForm.taxAmount} onChange={(e) => setEditForm({ ...editForm, taxAmount: parseFloat(e.target.value) || 0 })} />
               </div>
               <div>
                 <Label>Ukupno</Label>
@@ -913,9 +948,14 @@ export default function Expenses() {
                     </p>
                   </div>
                 </div>
-                <Badge variant={statusConfig[detailExpense.status]?.variant || 'outline'}>
-                  {statusConfig[detailExpense.status]?.label || detailExpense.status}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={statusConfig[detailExpense.status]?.variant || 'outline'}>
+                    {statusConfig[detailExpense.status]?.label || detailExpense.status}
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={() => { handleEditOpen(detailExpense); setDetailExpense(null); setDetailPreviewUrl(null); }}>
+                    <Pencil className="h-4 w-4 mr-1" /> Uredi
+                  </Button>
+                </div>
               </div>
 
               <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
