@@ -76,6 +76,9 @@ export default function Expenses() {
   // Detail modal
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
   const [detailPreviewUrl, setDetailPreviewUrl] = useState<string | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [editingLineItems, setEditingLineItems] = useState(false);
+  const [detailLineItems, setDetailLineItems] = useState<{ description: string; quantity: number; price: number; total: number }[]>([]);
 
   // Edit modal
   const [editOpen, setEditOpen] = useState(false);
@@ -980,7 +983,7 @@ export default function Expenses() {
                             </div>
                           </div>
                         ) : (
-                          <img src={detailPreviewUrl} alt="Račun" className="w-full h-auto" />
+                          <img src={detailPreviewUrl} alt="Račun" className="w-full h-auto cursor-zoom-in" onClick={() => setFullscreenImage(detailPreviewUrl)} />
                         )
                       ) : (
                         <div className="aspect-[3/4] flex flex-col items-center justify-center">
@@ -1079,21 +1082,65 @@ export default function Expenses() {
                     {/* Stavke */}
                     {detailExpense.lineItems && detailExpense.lineItems.length > 0 && (
                       <div className="bg-muted/30 rounded-xl p-4 border">
-                        <p className="text-sm font-medium text-muted-foreground mb-2">
-                          Stavke ({detailExpense.lineItems.length})
-                        </p>
-                        <div className="space-y-1">
-                          {detailExpense.lineItems.map((item, idx) => (
-                            <div key={idx} className="flex justify-between text-sm">
-                              <span className="text-muted-foreground truncate flex-1">
-                                {item.description || `Stavka ${idx + 1}`}
-                              </span>
-                              <span className="font-medium ml-2">
-                                {formatCurrency(item.total || 0)}
-                              </span>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Stavke ({editingLineItems ? detailLineItems.length : detailExpense.lineItems.length})
+                          </p>
+                          {!editingLineItems ? (
+                            <Button variant="outline" size="sm" onClick={() => { setDetailLineItems([...(detailExpense.lineItems || [])]); setEditingLineItems(true); }}>
+                              <Pencil className="h-3.5 w-3.5 mr-1" /> Uredi
+                            </Button>
+                          ) : (
+                            <div className="flex gap-1">
+                              <Button variant="outline" size="sm" onClick={() => setEditingLineItems(false)}>Otkaži</Button>
+                              <Button size="sm" onClick={async () => {
+                                await updateExpense(detailExpense.id, { lineItems: detailLineItems });
+                                setDetailExpense({ ...detailExpense, lineItems: detailLineItems });
+                                setEditingLineItems(false);
+                              }}>Sačuvaj</Button>
                             </div>
-                          ))}
+                          )}
                         </div>
+                        {editingLineItems ? (
+                          <div className="space-y-2">
+                            {detailLineItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2 text-sm">
+                                <Input
+                                  value={item.description}
+                                  onChange={(e) => { const items = [...detailLineItems]; items[idx] = { ...items[idx], description: e.target.value }; setDetailLineItems(items); }}
+                                  className="h-8 text-sm flex-1"
+                                  placeholder="Opis"
+                                />
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.total}
+                                  onChange={(e) => { const items = [...detailLineItems]; items[idx] = { ...items[idx], total: parseFloat(e.target.value) || 0 }; setDetailLineItems(items); }}
+                                  className="h-8 text-sm w-24"
+                                />
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => { setDetailLineItems(detailLineItems.filter((_, i) => i !== idx)); }}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            ))}
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => setDetailLineItems([...detailLineItems, { description: '', quantity: 1, price: 0, total: 0 }])}>
+                              <Plus className="h-3.5 w-3.5 mr-1" /> Dodaj stavku
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {detailExpense.lineItems.map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-sm">
+                                <span className="text-muted-foreground truncate flex-1">
+                                  {item.description || `Stavka ${idx + 1}`}
+                                </span>
+                                <span className="font-medium ml-2">
+                                  {formatCurrency(item.total || 0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1103,6 +1150,16 @@ export default function Expenses() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Fullscreen Image Viewer */}
+      {fullscreenImage && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center" onClick={() => setFullscreenImage(null)}>
+          <button onClick={() => setFullscreenImage(null)} className="absolute top-4 right-4 text-white p-2 hover:bg-white/20 rounded-lg z-10">
+            <X className="h-6 w-6" />
+          </button>
+          <img src={fullscreenImage} alt="Račun" className="max-w-full max-h-full object-contain p-4" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
 
     </div>
   );
