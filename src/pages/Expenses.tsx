@@ -1003,6 +1003,17 @@ export default function Expenses() {
                       </div>
                     </div>
 
+                    {/* Napomena */}
+                    {detailExpense.description && (
+                      <div className="bg-blue-50/50 rounded-xl p-4 border border-blue-100">
+                        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                          <FileIcon size={16} className="text-primary" />
+                          Napomena
+                        </div>
+                        <p className="text-sm">{detailExpense.description}</p>
+                      </div>
+                    )}
+
                     {/* Iznosi */}
                     <div className="bg-muted/30 rounded-xl p-4 space-y-3 border">
                       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
