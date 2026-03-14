@@ -31,7 +31,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   };
 
   return (
-    <header className="h-14 border-b bg-white flex items-center px-3 lg:px-6 sticky top-0 z-10">
+    <header className="border-b bg-white flex items-center px-3 lg:px-6 sticky top-0 z-10 h-[calc(3.5rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)]">
       {/* Mobile: back button + hamburger */}
       <div className="flex items-center lg:hidden">
         {showBack && (

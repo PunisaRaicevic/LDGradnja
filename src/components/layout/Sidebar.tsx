@@ -66,7 +66,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         mobileOpen && 'fixed inset-y-0 left-0 z-50 flex w-64'
       )}
     >
-      <div className="flex items-center justify-between p-4 border-b border-white/10">
+      <div className="flex items-center justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] border-b border-white/10">
         {(!collapsed || mobileOpen) && (
           <div className="flex items-center gap-2">
             <Building2 className="h-6 w-6 text-primary-foreground" />
@@ -145,7 +145,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
       </nav>
 
       {/* User & Logout */}
-      <div className="border-t border-white/10 p-3">
+      <div className="border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {(!collapsed || mobileOpen) ? (
           <div className="flex items-center gap-2 px-2 mb-2">
             <User className="h-4 w-4 text-white/50 flex-shrink-0" />

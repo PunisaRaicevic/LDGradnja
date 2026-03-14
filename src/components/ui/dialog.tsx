@@ -27,7 +27,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     <div
       ref={ref}
       className={cn(
-        "bg-background rounded-lg border shadow-lg w-full max-w-lg max-h-[85vh] overflow-y-auto p-6",
+        "bg-background rounded-lg border shadow-lg w-full max-w-lg max-h-[85vh] overflow-y-auto p-6 pt-[max(1.5rem,env(safe-area-inset-top))]",
         className
       )}
       {...props}
