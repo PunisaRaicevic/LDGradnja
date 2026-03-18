@@ -24,6 +24,7 @@ import type { ExtractedExpense } from '@/lib/ai-extract';
 import { EXPENSE_CATEGORIES } from '@/types';
 import type { Expense, ExpenseCategory } from '@/types';
 import ExpenseConfirmModal from '@/components/shared/ExpenseConfirmModal';
+import type { ConfirmResult } from '@/components/shared/ExpenseConfirmModal';
 import AiAnalysisChat from '@/components/shared/AiAnalysisChat';
 import { exportExpensesExcel, exportExpensesPDF } from '@/lib/expense-report';
 import type { ReportFilters } from '@/lib/expense-report';
@@ -279,7 +280,7 @@ export default function Expenses() {
     setAiPreviewUrl(null);
   };
 
-  const handleConfirmSave = async (data: ExtractedExpense) => {
+  const handleConfirmSave = async (data: ConfirmResult) => {
     if (!projectId) return;
     await addExpense(
       {
@@ -295,6 +296,8 @@ export default function Expenses() {
         dueDate: data.dueDate || undefined,
         vendorTaxId: data.vendorTaxId || undefined,
         taxAmount: data.taxAmount || 0,
+        paidBy: data.paidBy || undefined,
+        paidByShares: data.paidByShares || undefined,
         status: 'confirmed',
         extractionConfidence: data.confidence,
         lineItems: data.items.length > 0 ? data.items : undefined,
@@ -1074,6 +1077,7 @@ export default function Expenses() {
           extractedData={pendingExtraction}
           previewUrl={pendingPreviewUrl}
           previewType={pendingFile?.type}
+          memberNames={memberNames}
           onConfirm={handleConfirmSave}
           onCancel={handleConfirmCancel}
         />

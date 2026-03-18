@@ -5,11 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import {
   X, CheckCircle, AlertTriangle,
-  Edit2, Save, Building, Calendar, DollarSign,
+  Edit2, Save, Building, Calendar, DollarSign, Users, Trash2,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { EXPENSE_CATEGORIES } from '@/types';
 import type { ExtractedExpense } from '@/lib/ai-extract';
+
+export interface ConfirmResult extends ExtractedExpense {
+  paidBy?: string;
+  paidByShares?: { name: string; amount: number }[];
+}
 
 interface ExpenseConfirmModalProps {
   open: boolean;
@@ -17,7 +22,8 @@ interface ExpenseConfirmModalProps {
   extractedData: ExtractedExpense;
   previewUrl: string | null;
   previewType?: string;
-  onConfirm: (data: ExtractedExpense) => void;
+  memberNames?: string[];
+  onConfirm: (data: ConfirmResult) => void;
   onCancel: () => void;
 }
 
@@ -42,11 +48,14 @@ export default function ExpenseConfirmModal({
   extractedData,
   previewUrl,
   previewType,
+  memberNames = [],
   onConfirm,
   onCancel,
 }: ExpenseConfirmModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [paidBy, setPaidBy] = useState('');
+  const [shares, setShares] = useState<{ name: string; amount: number }[]>([]);
   const [formData, setFormData] = useState({
     date: extractedData.date || '',
     invoiceNumber: extractedData.invoiceNumber || '',
@@ -73,6 +82,8 @@ export default function ExpenseConfirmModal({
       totalAmount: extractedData.totalAmount || 0,
     });
     setIsEditing(false);
+    setPaidBy('');
+    setShares([]);
   }, [extractedData]);
 
   if (!open) return null;
@@ -87,6 +98,7 @@ export default function ExpenseConfirmModal({
 
   const handleConfirm = () => {
     setIsSaving(true);
+    const validShares = shares.filter(s => s.name && s.amount > 0);
     onConfirm({
       ...extractedData,
       date: formData.date,
@@ -98,6 +110,8 @@ export default function ExpenseConfirmModal({
       category: formData.category,
       taxAmount: Number(formData.taxAmount),
       totalAmount: Number(formData.totalAmount),
+      paidBy: validShares.length === 1 ? validShares[0].name : (paidBy || undefined),
+      paidByShares: validShares.length > 0 ? validShares : undefined,
     });
     setIsSaving(false);
   };
@@ -311,6 +325,78 @@ export default function ExpenseConfirmModal({
                   </div>
                 </div>
               </div>
+
+              {/* Ko je platio */}
+              {memberNames.length > 0 && (
+                <div className="bg-muted/30 rounded-xl p-4 space-y-3 border">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <Users size={16} className="text-primary" />
+                    Ko je platio?
+                  </div>
+                  {shares.length === 0 ? (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {memberNames.map((name) => (
+                          <Button key={name} type="button" size="sm"
+                            variant={paidBy === name ? 'default' : 'outline'}
+                            onClick={() => setPaidBy(paidBy === name ? '' : name)}>
+                            {name}
+                          </Button>
+                        ))}
+                      </div>
+                      <button type="button" className="text-xs text-primary hover:underline"
+                        onClick={() => {
+                          const total = Number(formData.totalAmount) || 0;
+                          const perPerson = Math.round(total / memberNames.length * 100) / 100;
+                          setShares(memberNames.map((name, i) => ({
+                            name,
+                            amount: i === memberNames.length - 1
+                              ? Math.round((total - perPerson * (memberNames.length - 1)) * 100) / 100
+                              : perPerson,
+                          })));
+                          setPaidBy('');
+                        }}>
+                        Podijeli račun na više osoba
+                      </button>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      {shares.map((share, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Select value={share.name} onChange={(e) => {
+                            const s = [...shares]; s[idx] = { ...s[idx], name: e.target.value }; setShares(s);
+                          }} className="w-28 h-9">
+                            <option value="">--</option>
+                            {memberNames.map((p) => <option key={p} value={p}>{p}</option>)}
+                          </Select>
+                          <Input type="number" step="0.01" value={share.amount}
+                            onChange={(e) => {
+                              const s = [...shares]; s[idx] = { ...s[idx], amount: parseFloat(e.target.value) || 0 }; setShares(s);
+                            }} className="flex-1 h-9" />
+                          <span className="text-xs text-muted-foreground">€</span>
+                          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                            onClick={() => setShares(shares.filter((_, i) => i !== idx))}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between text-xs">
+                        <button type="button" className="text-primary hover:underline"
+                          onClick={() => setShares([...shares, { name: '', amount: 0 }])}>
+                          + Dodaj osobu
+                        </button>
+                        <span className={`font-medium ${Math.abs(shares.reduce((s, sh) => s + sh.amount, 0) - Number(formData.totalAmount)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                          Zbir: {formatCurrency(shares.reduce((s, sh) => s + sh.amount, 0))} / {formatCurrency(Number(formData.totalAmount))}
+                        </span>
+                      </div>
+                      <button type="button" className="text-xs text-muted-foreground hover:underline"
+                        onClick={() => setShares([])}>
+                        Jedna osoba plaća cijeli račun
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Line Items Preview - matching invoice-app */}
               {lineItems.length > 0 && (
