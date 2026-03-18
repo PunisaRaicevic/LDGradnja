@@ -23,6 +23,7 @@ function mapRow(r: any): Expense {
     dueDate: r.due_date || undefined,
     vendorTaxId: r.vendor_tax_id || undefined,
     taxAmount: r.tax_amount != null ? Number(r.tax_amount) : undefined,
+    paidBy: r.paid_by || undefined,
     status: r.status || 'confirmed',
     extractionConfidence: r.extraction_confidence || undefined,
     lineItems: r.line_items || undefined,
@@ -67,6 +68,7 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
       due_date: data.dueDate || null,
       vendor_tax_id: data.vendorTaxId || null,
       tax_amount: data.taxAmount ?? 0,
+      paid_by: data.paidBy || null,
       status: data.status || 'confirmed',
       extraction_confidence: data.extractionConfidence || null,
       line_items: data.lineItems || null,
@@ -87,6 +89,7 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
     if (data.dueDate !== undefined) u.due_date = data.dueDate;
     if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId;
     if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
+    if (data.paidBy !== undefined) u.paid_by = data.paidBy;
     if (data.status !== undefined) u.status = data.status;
     if (data.extractionConfidence !== undefined) u.extraction_confidence = data.extractionConfidence;
     if (data.lineItems !== undefined) u.line_items = data.lineItems;
@@ -107,6 +110,7 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
     if (data.dueDate !== undefined) u.due_date = data.dueDate;
     if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId;
     if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
+    if (data.paidBy !== undefined) u.paid_by = data.paidBy;
     if (data.lineItems !== undefined) u.line_items = data.lineItems;
     await supabase.from('expenses').update(u).eq('id', id);
     set((s) => ({ expenses: s.expenses.map((e) => (e.id === id ? { ...e, ...data, status: 'confirmed' } : e)) }));

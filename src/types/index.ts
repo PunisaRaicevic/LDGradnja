@@ -131,6 +131,7 @@ export interface Expense {
   dueDate?: string;
   vendorTaxId?: string;
   taxAmount?: number;
+  paidBy?: string;
   status: 'pending' | 'confirmed';
   extractionConfidence?: Record<string, number>;
   lineItems?: LineItem[];

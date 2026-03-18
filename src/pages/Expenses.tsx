@@ -23,6 +23,7 @@ import type { ExtractedExpense } from '@/lib/ai-extract';
 import { EXPENSE_CATEGORIES } from '@/types';
 import type { Expense, ExpenseCategory } from '@/types';
 import ExpenseConfirmModal from '@/components/shared/ExpenseConfirmModal';
+import AiAnalysisChat from '@/components/shared/AiAnalysisChat';
 import { exportExpensesExcel, exportExpensesPDF } from '@/lib/expense-report';
 import type { ReportFilters } from '@/lib/expense-report';
 
@@ -30,6 +31,14 @@ import type { ReportFilters } from '@/lib/expense-report';
 const statusConfig: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' | 'outline' }> = {
   confirmed: { label: 'Potvrđen', variant: 'success' },
   pending: { label: 'Čeka potvrdu', variant: 'warning' },
+};
+
+const PAYERS = ['Lolo', 'Saša', 'Noka'] as const;
+
+const PAYER_COLORS: Record<string, { bg: string; text: string; bar: string }> = {
+  'Lolo': { bg: 'from-blue-50 to-blue-50/30', text: 'text-blue-700', bar: 'bg-blue-500' },
+  'Saša': { bg: 'from-emerald-50 to-emerald-50/30', text: 'text-emerald-700', bar: 'bg-emerald-500' },
+  'Noka': { bg: 'from-violet-50 to-violet-50/30', text: 'text-violet-700', bar: 'bg-violet-500' },
 };
 
 const emptyForm = {
@@ -40,6 +49,7 @@ const emptyForm = {
   price: 0,
   totalAmount: 0,
   category: 'materijal' as ExpenseCategory,
+  paidBy: '',
   invoiceNumber: '',
   vendorTaxId: '',
   dueDate: '',
@@ -52,6 +62,8 @@ export default function Expenses() {
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [paidByFilter, setPaidByFilter] = useState('');
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [receiptFile, setReceiptFile] = useState<File | undefined>();
@@ -102,7 +114,8 @@ export default function Expenses() {
       e.supplier.toLowerCase().includes(search.toLowerCase()) ||
       e.description.toLowerCase().includes(search.toLowerCase());
     const matchCategory = !categoryFilter || e.category === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchPaidBy = !paidByFilter || e.paidBy === paidByFilter;
+    return matchSearch && matchCategory && matchPaidBy;
   });
 
   const totalExpenses = filtered.reduce((sum, e) => sum + e.totalAmount, 0);
@@ -112,7 +125,7 @@ export default function Expenses() {
   const handleSave = async () => {
     if (!projectId || !form.description) return;
     const totalAmount = form.quantity * form.price;
-    await addExpense({ ...form, projectId, totalAmount, status: 'confirmed' }, receiptFile);
+    await addExpense({ ...form, projectId, totalAmount, paidBy: form.paidBy || undefined, status: 'confirmed' }, receiptFile);
     setDialogOpen(false);
     setForm(emptyForm);
     setReceiptFile(undefined);
@@ -128,6 +141,7 @@ export default function Expenses() {
       price: expense.price,
       totalAmount: expense.totalAmount,
       category: expense.category as ExpenseCategory,
+      paidBy: expense.paidBy || '',
       invoiceNumber: expense.invoiceNumber || '',
       vendorTaxId: expense.vendorTaxId || '',
       dueDate: expense.dueDate || '',
@@ -142,6 +156,7 @@ export default function Expenses() {
     await updateExpense(editExpense.id, {
       ...editForm,
       totalAmount,
+      paidBy: editForm.paidBy || undefined,
       taxAmount: editForm.taxAmount,
       invoiceNumber: editForm.invoiceNumber,
       vendorTaxId: editForm.vendorTaxId,
@@ -335,6 +350,10 @@ export default function Expenses() {
           <p className="text-xs lg:text-sm text-muted-foreground">Pregled troškova i upravljanje fakturama</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant={showAnalysis ? 'default' : 'outline'} onClick={() => setShowAnalysis(!showAnalysis)}>
+            <Bot className="h-4 w-4 mr-2" />
+            AI Analiza
+          </Button>
           <Button variant="outline" onClick={() => setReportOpen(true)}>
             <Download className="h-4 w-4 mr-2" />
             Izvještaj
@@ -406,12 +425,21 @@ export default function Expenses() {
         </Card>
       </div>
 
+      {/* AI Analiza Chat */}
+      <AiAnalysisChat expenses={expenses} open={showAnalysis} onClose={() => setShowAnalysis(false)} />
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Pretraži po dobavljaču ili opisu..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
+        <Select value={paidByFilter} onChange={(e) => setPaidByFilter(e.target.value)} className="sm:w-40">
+          <option value="">Svi platioci</option>
+          {PAYERS.map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </Select>
         <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="sm:w-48">
           <option value="">Sve kategorije</option>
           {EXPENSE_CATEGORIES.map((cat) => (
@@ -442,6 +470,7 @@ export default function Expenses() {
                 <TableHead>Dobavljač</TableHead>
                 <TableHead>Opis</TableHead>
                 <TableHead>Kategorija</TableHead>
+                <TableHead>Platio</TableHead>
                 <TableHead className="text-right">Kol.</TableHead>
                 <TableHead className="text-right">Cijena</TableHead>
                 <TableHead className="text-right">PDV</TableHead>
@@ -466,6 +495,15 @@ export default function Expenses() {
                       <Badge variant="outline">
                         {EXPENSE_CATEGORIES.find((c) => c.value === expense.category)?.label}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {expense.paidBy ? (
+                        <Badge className={PAYER_COLORS[expense.paidBy]?.bar || 'bg-gray-500'}>
+                          {expense.paidBy}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">{expense.quantity}</TableCell>
                     <TableCell className="text-right">{formatCurrency(expense.price)}</TableCell>
@@ -500,7 +538,7 @@ export default function Expenses() {
                 );
               })}
               <TableRow className="bg-muted/50 font-bold">
-                <TableCell colSpan={7} className="text-right">UKUPNO:</TableCell>
+                <TableCell colSpan={8} className="text-right">UKUPNO:</TableCell>
                 <TableCell className="text-right">{formatCurrency(totalTax)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(totalExpenses)}</TableCell>
                 <TableCell />
@@ -528,6 +566,11 @@ export default function Expenses() {
                     <Badge variant="outline" className="text-xs">
                       {EXPENSE_CATEGORIES.find((c) => c.value === expense.category)?.label}
                     </Badge>
+                    {expense.paidBy && (
+                      <Badge className={`text-xs ${PAYER_COLORS[expense.paidBy]?.bar || 'bg-gray-500'}`}>
+                        {expense.paidBy}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex gap-3 text-xs">
@@ -589,9 +632,20 @@ export default function Expenses() {
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Dobavljač</Label>
-              <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Dobavljač</Label>
+                <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} />
+              </div>
+              <div>
+                <Label>Platio</Label>
+                <Select value={form.paidBy} onChange={(e) => setForm({ ...form, paidBy: e.target.value })}>
+                  <option value="">-- Odaberi --</option>
+                  {PAYERS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </Select>
+              </div>
             </div>
             <div>
               <Label>Opis stavke *</Label>
@@ -654,7 +708,7 @@ export default function Expenses() {
                 <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>Dobavljač</Label>
                 <Input value={editForm.supplier} onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })} />
@@ -662,6 +716,15 @@ export default function Expenses() {
               <div>
                 <Label>PIB</Label>
                 <Input value={editForm.vendorTaxId} onChange={(e) => setEditForm({ ...editForm, vendorTaxId: e.target.value })} />
+              </div>
+              <div>
+                <Label>Platio</Label>
+                <Select value={editForm.paidBy} onChange={(e) => setEditForm({ ...editForm, paidBy: e.target.value })}>
+                  <option value="">-- Odaberi --</option>
+                  {PAYERS.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </Select>
               </div>
             </div>
             <div>
@@ -1044,6 +1107,16 @@ export default function Expenses() {
                         <label className="text-xs text-muted-foreground">Opis</label>
                         <p className="text-sm text-muted-foreground">{detailExpense.description || '-'}</p>
                       </div>
+                      {detailExpense.paidBy && (
+                        <div>
+                          <label className="text-xs text-muted-foreground">Platio</label>
+                          <p className="font-medium">
+                            <Badge className={PAYER_COLORS[detailExpense.paidBy]?.bar || 'bg-gray-500'}>
+                              {detailExpense.paidBy}
+                            </Badge>
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Napomena */}
