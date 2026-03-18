@@ -24,6 +24,7 @@ function mapRow(r: any): Expense {
     vendorTaxId: r.vendor_tax_id || undefined,
     taxAmount: r.tax_amount != null ? Number(r.tax_amount) : undefined,
     paidBy: r.paid_by || undefined,
+    paidByShares: r.paid_by_shares || undefined,
     status: r.status || 'confirmed',
     extractionConfidence: r.extraction_confidence || undefined,
     lineItems: r.line_items || undefined,
@@ -69,6 +70,7 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
       vendor_tax_id: data.vendorTaxId || null,
       tax_amount: data.taxAmount ?? 0,
       paid_by: data.paidBy || null,
+      paid_by_shares: data.paidByShares || null,
       status: data.status || 'confirmed',
       extraction_confidence: data.extractionConfidence || null,
       line_items: data.lineItems || null,
@@ -90,6 +92,7 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
     if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId || null;
     if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
     if (data.paidBy !== undefined) u.paid_by = data.paidBy || null;
+    if (data.paidByShares !== undefined) u.paid_by_shares = data.paidByShares && data.paidByShares.length > 0 ? data.paidByShares : null;
     if (data.status !== undefined) u.status = data.status;
     if (data.extractionConfidence !== undefined) u.extraction_confidence = data.extractionConfidence;
     if (data.lineItems !== undefined) u.line_items = data.lineItems;
@@ -115,6 +118,7 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
     if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId || null;
     if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
     if (data.paidBy !== undefined) u.paid_by = data.paidBy || null;
+    if (data.paidByShares !== undefined) u.paid_by_shares = data.paidByShares && data.paidByShares.length > 0 ? data.paidByShares : null;
     if (data.lineItems !== undefined) u.line_items = data.lineItems;
     const { error } = await supabase.from('expenses').update(u).eq('id', id);
     if (error) {

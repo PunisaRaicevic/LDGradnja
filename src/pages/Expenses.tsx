@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, getToday } from '@/lib/utils';
 import { getStorageUrl } from '@/lib/supabase';
+import { useUserStore } from '@/store/useUserStore';
 import { extractExpenseFromImage } from '@/lib/ai-extract';
 import type { ExtractedExpense } from '@/lib/ai-extract';
 import { EXPENSE_CATEGORIES } from '@/types';
@@ -33,13 +34,19 @@ const statusConfig: Record<string, { label: string; variant: 'success' | 'warnin
   pending: { label: 'Čeka potvrdu', variant: 'warning' },
 };
 
-const PAYERS = ['Lolo', 'Saša', 'Noka'] as const;
+const MEMBER_COLORS = [
+  { bg: 'from-blue-50 to-blue-50/30', text: 'text-blue-700', bar: 'bg-blue-500' },
+  { bg: 'from-emerald-50 to-emerald-50/30', text: 'text-emerald-700', bar: 'bg-emerald-500' },
+  { bg: 'from-violet-50 to-violet-50/30', text: 'text-violet-700', bar: 'bg-violet-500' },
+  { bg: 'from-amber-50 to-amber-50/30', text: 'text-amber-700', bar: 'bg-amber-500' },
+  { bg: 'from-rose-50 to-rose-50/30', text: 'text-rose-700', bar: 'bg-rose-500' },
+  { bg: 'from-cyan-50 to-cyan-50/30', text: 'text-cyan-700', bar: 'bg-cyan-500' },
+];
 
-const PAYER_COLORS: Record<string, { bg: string; text: string; bar: string }> = {
-  'Lolo': { bg: 'from-blue-50 to-blue-50/30', text: 'text-blue-700', bar: 'bg-blue-500' },
-  'Saša': { bg: 'from-emerald-50 to-emerald-50/30', text: 'text-emerald-700', bar: 'bg-emerald-500' },
-  'Noka': { bg: 'from-violet-50 to-violet-50/30', text: 'text-violet-700', bar: 'bg-violet-500' },
-};
+function getMemberColor(name: string, members: string[]) {
+  const idx = members.indexOf(name);
+  return MEMBER_COLORS[idx >= 0 ? idx % MEMBER_COLORS.length : 0] || MEMBER_COLORS[0];
+}
 
 const emptyForm = {
   date: getToday(),
@@ -59,6 +66,10 @@ const emptyForm = {
 export default function Expenses() {
   const { projectId } = useParams();
   const { expenses, loadExpenses, addExpense, updateExpense, deleteExpense, confirmExpense } = useExpenseStore();
+  const { projectMembers, loadProjectMembers } = useUserStore();
+
+  // Imena članova projekta za "Ko je platio" dropdown
+  const memberNames = projectMembers.map(m => m.userName || '').filter(Boolean);
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -66,6 +77,7 @@ export default function Expenses() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [formShares, setFormShares] = useState<{ name: string; amount: number }[]>([]);
   const [receiptFile, setReceiptFile] = useState<File | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -96,6 +108,7 @@ export default function Expenses() {
   const [editOpen, setEditOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
+  const [editShares, setEditShares] = useState<{ name: string; amount: number }[]>([]);
 
   // Report dialog
   // Delete confirmation
@@ -106,15 +119,19 @@ export default function Expenses() {
   const [reportFilters, setReportFilters] = useState<ReportFilters>({});
 
   useEffect(() => {
-    if (projectId) loadExpenses(projectId);
-  }, [projectId, loadExpenses]);
+    if (projectId) {
+      loadExpenses(projectId);
+      loadProjectMembers(projectId);
+    }
+  }, [projectId, loadExpenses, loadProjectMembers]);
 
   const filtered = expenses.filter((e) => {
     const matchSearch =
       e.supplier.toLowerCase().includes(search.toLowerCase()) ||
       e.description.toLowerCase().includes(search.toLowerCase());
     const matchCategory = !categoryFilter || e.category === categoryFilter;
-    const matchPaidBy = !paidByFilter || e.paidBy === paidByFilter;
+    const matchPaidBy = !paidByFilter || e.paidBy === paidByFilter
+      || (e.paidByShares && e.paidByShares.some(s => s.name === paidByFilter));
     return matchSearch && matchCategory && matchPaidBy;
   });
 
@@ -125,9 +142,16 @@ export default function Expenses() {
   const handleSave = async () => {
     if (!projectId || !form.description) return;
     const totalAmount = form.quantity * form.price;
-    await addExpense({ ...form, projectId, totalAmount, paidBy: form.paidBy || undefined, status: 'confirmed' }, receiptFile);
+    const validShares = formShares.filter(s => s.name && s.amount > 0);
+    await addExpense({
+      ...form, projectId, totalAmount,
+      paidBy: validShares.length === 1 ? validShares[0].name : (form.paidBy || undefined),
+      paidByShares: validShares.length > 0 ? validShares : undefined,
+      status: 'confirmed',
+    }, receiptFile);
     setDialogOpen(false);
     setForm(emptyForm);
+    setFormShares([]);
     setReceiptFile(undefined);
   };
 
@@ -147,12 +171,14 @@ export default function Expenses() {
       dueDate: expense.dueDate || '',
       taxAmount: expense.taxAmount || 0,
     });
+    setEditShares(expense.paidByShares ? [...expense.paidByShares] : []);
     setEditOpen(true);
   };
 
   const handleEditSave = async () => {
     if (!editExpense || !editForm.description) return;
     const totalAmount = editForm.quantity * editForm.price;
+    const validShares = editShares.filter(s => s.name && s.amount > 0);
     await updateExpense(editExpense.id, {
       date: editForm.date,
       supplier: editForm.supplier,
@@ -161,7 +187,8 @@ export default function Expenses() {
       price: editForm.price,
       totalAmount,
       category: editForm.category,
-      paidBy: editForm.paidBy || undefined,
+      paidBy: validShares.length === 1 ? validShares[0].name : (editForm.paidBy || undefined),
+      paidByShares: validShares.length > 0 ? validShares : undefined,
       taxAmount: editForm.taxAmount,
       invoiceNumber: editForm.invoiceNumber || undefined,
       vendorTaxId: editForm.vendorTaxId || undefined,
@@ -441,7 +468,7 @@ export default function Expenses() {
         </div>
         <Select value={paidByFilter} onChange={(e) => setPaidByFilter(e.target.value)} className="sm:w-40">
           <option value="">Svi platioci</option>
-          {PAYERS.map((p) => (
+          {memberNames.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </Select>
@@ -502,8 +529,16 @@ export default function Expenses() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {expense.paidBy ? (
-                        <Badge className={PAYER_COLORS[expense.paidBy]?.bar || 'bg-gray-500'}>
+                      {expense.paidByShares && expense.paidByShares.length > 1 ? (
+                        <div className="flex flex-wrap gap-0.5">
+                          {expense.paidByShares.map((s, i) => (
+                            <Badge key={i} className={`text-[10px] px-1.5 ${getMemberColor(s.name, memberNames).bar}`}>
+                              {s.name} {formatCurrency(s.amount)}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : expense.paidBy ? (
+                        <Badge className={getMemberColor(expense.paidBy, memberNames).bar}>
                           {expense.paidBy}
                         </Badge>
                       ) : (
@@ -571,11 +606,17 @@ export default function Expenses() {
                     <Badge variant="outline" className="text-xs">
                       {EXPENSE_CATEGORIES.find((c) => c.value === expense.category)?.label}
                     </Badge>
-                    {expense.paidBy && (
-                      <Badge className={`text-xs ${PAYER_COLORS[expense.paidBy]?.bar || 'bg-gray-500'}`}>
+                    {expense.paidByShares && expense.paidByShares.length > 1 ? (
+                      expense.paidByShares.map((s, i) => (
+                        <Badge key={i} className={`text-[10px] px-1.5 ${getMemberColor(s.name, memberNames).bar}`}>
+                          {s.name} {formatCurrency(s.amount)}
+                        </Badge>
+                      ))
+                    ) : expense.paidBy ? (
+                      <Badge className={`text-xs ${getMemberColor(expense.paidBy, memberNames).bar}`}>
                         {expense.paidBy}
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex gap-3 text-xs">
@@ -637,20 +678,9 @@ export default function Expenses() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Dobavljač</Label>
-                <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} />
-              </div>
-              <div>
-                <Label>Platio</Label>
-                <Select value={form.paidBy} onChange={(e) => setForm({ ...form, paidBy: e.target.value })}>
-                  <option value="">-- Odaberi --</option>
-                  {PAYERS.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </Select>
-              </div>
+            <div>
+              <Label>Dobavljač</Label>
+              <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} />
             </div>
             <div>
               <Label>Opis stavke *</Label>
@@ -669,6 +699,72 @@ export default function Expenses() {
                 <Label>Ukupno</Label>
                 <Input value={formatCurrency(form.quantity * form.price)} readOnly className="bg-muted" />
               </div>
+            </div>
+            {/* Ko je platio */}
+            <div className="border rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="mb-0">Ko je platio?</Label>
+                {formShares.length === 0 ? (
+                  <div className="flex gap-1">
+                    {memberNames.map((p) => (
+                      <Button key={p} type="button" variant={form.paidBy === p ? 'default' : 'outline'} size="sm"
+                        onClick={() => setForm({ ...form, paidBy: form.paidBy === p ? '' : p })}>
+                        {p}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              {formShares.length === 0 && (
+                <button type="button" className="text-xs text-primary hover:underline"
+                  onClick={() => {
+                    const total = form.quantity * form.price;
+                    const perPerson = Math.round(total / memberNames.length * 100) / 100;
+                    setFormShares(memberNames.map((p, i) => ({
+                      name: p,
+                      amount: i === memberNames.length - 1 ? Math.round((total - perPerson * (memberNames.length - 1)) * 100) / 100 : perPerson,
+                    })));
+                    setForm({ ...form, paidBy: '' });
+                  }}>
+                  Podijeli račun na više osoba
+                </button>
+              )}
+              {formShares.length > 0 && (
+                <div className="space-y-2">
+                  {formShares.map((share, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Select value={share.name} onChange={(e) => {
+                        const s = [...formShares]; s[idx] = { ...s[idx], name: e.target.value }; setFormShares(s);
+                      }} className="w-28">
+                        <option value="">--</option>
+                        {memberNames.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </Select>
+                      <Input type="number" step="0.01" value={share.amount}
+                        onChange={(e) => {
+                          const s = [...formShares]; s[idx] = { ...s[idx], amount: parseFloat(e.target.value) || 0 }; setFormShares(s);
+                        }} className="flex-1" />
+                      <span className="text-xs text-muted-foreground">€</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                        onClick={() => setFormShares(formShares.filter((_, i) => i !== idx))}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-xs">
+                    <button type="button" className="text-primary hover:underline"
+                      onClick={() => setFormShares([...formShares, { name: '', amount: 0 }])}>
+                      + Dodaj osobu
+                    </button>
+                    <span className={`font-medium ${Math.abs(formShares.reduce((s, sh) => s + sh.amount, 0) - form.quantity * form.price) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                      Zbir: {formatCurrency(formShares.reduce((s, sh) => s + sh.amount, 0))} / {formatCurrency(form.quantity * form.price)}
+                    </span>
+                  </div>
+                  <button type="button" className="text-xs text-muted-foreground hover:underline"
+                    onClick={() => { setFormShares([]); }}>
+                    Jedna osoba plaća cijeli račun
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <Label>Račun (slika/sken)</Label>
@@ -713,7 +809,7 @@ export default function Expenses() {
                 <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Dobavljač</Label>
                 <Input value={editForm.supplier} onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })} />
@@ -721,15 +817,6 @@ export default function Expenses() {
               <div>
                 <Label>PIB</Label>
                 <Input value={editForm.vendorTaxId} onChange={(e) => setEditForm({ ...editForm, vendorTaxId: e.target.value })} />
-              </div>
-              <div>
-                <Label>Platio</Label>
-                <Select value={editForm.paidBy} onChange={(e) => setEditForm({ ...editForm, paidBy: e.target.value })}>
-                  <option value="">-- Odaberi --</option>
-                  {PAYERS.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </Select>
               </div>
             </div>
             <div>
@@ -753,6 +840,72 @@ export default function Expenses() {
                 <Label>Ukupno</Label>
                 <Input value={formatCurrency(editForm.quantity * editForm.price)} readOnly className="bg-muted" />
               </div>
+            </div>
+            {/* Ko je platio - edit */}
+            <div className="border rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="mb-0">Ko je platio?</Label>
+                {editShares.length === 0 ? (
+                  <div className="flex gap-1">
+                    {memberNames.map((p) => (
+                      <Button key={p} type="button" variant={editForm.paidBy === p ? 'default' : 'outline'} size="sm"
+                        onClick={() => setEditForm({ ...editForm, paidBy: editForm.paidBy === p ? '' : p })}>
+                        {p}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              {editShares.length === 0 && (
+                <button type="button" className="text-xs text-primary hover:underline"
+                  onClick={() => {
+                    const total = editForm.quantity * editForm.price;
+                    const perPerson = Math.round(total / memberNames.length * 100) / 100;
+                    setEditShares(memberNames.map((p, i) => ({
+                      name: p,
+                      amount: i === memberNames.length - 1 ? Math.round((total - perPerson * (memberNames.length - 1)) * 100) / 100 : perPerson,
+                    })));
+                    setEditForm({ ...editForm, paidBy: '' });
+                  }}>
+                  Podijeli račun na više osoba
+                </button>
+              )}
+              {editShares.length > 0 && (
+                <div className="space-y-2">
+                  {editShares.map((share, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Select value={share.name} onChange={(e) => {
+                        const s = [...editShares]; s[idx] = { ...s[idx], name: e.target.value }; setEditShares(s);
+                      }} className="w-28">
+                        <option value="">--</option>
+                        {memberNames.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </Select>
+                      <Input type="number" step="0.01" value={share.amount}
+                        onChange={(e) => {
+                          const s = [...editShares]; s[idx] = { ...s[idx], amount: parseFloat(e.target.value) || 0 }; setEditShares(s);
+                        }} className="flex-1" />
+                      <span className="text-xs text-muted-foreground">€</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                        onClick={() => setEditShares(editShares.filter((_, i) => i !== idx))}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-xs">
+                    <button type="button" className="text-primary hover:underline"
+                      onClick={() => setEditShares([...editShares, { name: '', amount: 0 }])}>
+                      + Dodaj osobu
+                    </button>
+                    <span className={`font-medium ${Math.abs(editShares.reduce((s, sh) => s + sh.amount, 0) - editForm.quantity * editForm.price) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                      Zbir: {formatCurrency(editShares.reduce((s, sh) => s + sh.amount, 0))} / {formatCurrency(editForm.quantity * editForm.price)}
+                    </span>
+                  </div>
+                  <button type="button" className="text-xs text-muted-foreground hover:underline"
+                    onClick={() => { setEditShares([]); }}>
+                    Jedna osoba plaća cijeli račun
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -1112,14 +1265,24 @@ export default function Expenses() {
                         <label className="text-xs text-muted-foreground">Opis</label>
                         <p className="text-sm text-muted-foreground">{detailExpense.description || '-'}</p>
                       </div>
-                      {detailExpense.paidBy && (
+                      {(detailExpense.paidByShares || detailExpense.paidBy) && (
                         <div>
                           <label className="text-xs text-muted-foreground">Platio</label>
-                          <p className="font-medium">
-                            <Badge className={PAYER_COLORS[detailExpense.paidBy]?.bar || 'bg-gray-500'}>
-                              {detailExpense.paidBy}
-                            </Badge>
-                          </p>
+                          {detailExpense.paidByShares && detailExpense.paidByShares.length > 1 ? (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {detailExpense.paidByShares.map((s, i) => (
+                                <Badge key={i} className={getMemberColor(s.name, memberNames).bar}>
+                                  {s.name}: {formatCurrency(s.amount)}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : detailExpense.paidBy ? (
+                            <p className="font-medium">
+                              <Badge className={getMemberColor(detailExpense.paidBy || '', memberNames).bar}>
+                                {detailExpense.paidBy}
+                              </Badge>
+                            </p>
+                          ) : null}
                         </div>
                       )}
                     </div>

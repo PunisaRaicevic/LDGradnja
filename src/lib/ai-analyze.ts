@@ -19,11 +19,19 @@ function buildExpenseSummary(expenses: Expense[]): string {
   const total = expenses.reduce((s, e) => s + e.totalAmount, 0);
   const totalTax = expenses.reduce((s, e) => s + (e.taxAmount || 0), 0);
 
-  // Po osobi
+  // Po osobi (podrška za podijeljene račune)
   const byPayer: Record<string, { total: number; count: number }> = {};
   let unassigned = 0;
   for (const e of expenses) {
-    if (e.paidBy) {
+    if (e.paidByShares && e.paidByShares.length > 0) {
+      for (const share of e.paidByShares) {
+        if (share.name) {
+          if (!byPayer[share.name]) byPayer[share.name] = { total: 0, count: 0 };
+          byPayer[share.name].total += share.amount;
+          byPayer[share.name].count += 1;
+        }
+      }
+    } else if (e.paidBy) {
       if (!byPayer[e.paidBy]) byPayer[e.paidBy] = { total: 0, count: 0 };
       byPayer[e.paidBy].total += e.totalAmount;
       byPayer[e.paidBy].count += 1;
@@ -66,7 +74,9 @@ function buildExpenseSummary(expenses: Expense[]): string {
         e.supplier || '-',
         e.description.substring(0, 60),
         EXPENSE_CATEGORIES.find(c => c.value === e.category)?.label || e.category,
-        e.paidBy || 'neoznačeno',
+        e.paidByShares && e.paidByShares.length > 1
+          ? e.paidByShares.map(s => `${s.name}:${formatCurrency(s.amount)}`).join('+')
+          : (e.paidBy || 'neoznačeno'),
         formatCurrency(e.totalAmount),
       ];
       return parts.join(' | ');
