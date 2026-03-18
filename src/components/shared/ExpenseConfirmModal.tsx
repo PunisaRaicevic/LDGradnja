@@ -428,7 +428,7 @@ export default function ExpenseConfirmModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-4 sm:p-6 border-t bg-muted/30 shrink-0">
+        <div className="flex items-center justify-between p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-6 border-t bg-muted/30 shrink-0">
           <Button variant="outline" onClick={onCancel}>
             Zatvori
           </Button>
