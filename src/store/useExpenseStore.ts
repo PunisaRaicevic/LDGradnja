@@ -78,41 +78,49 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
 
   updateExpense: async (id, data) => {
     const u: Record<string, any> = {};
-    if (data.date !== undefined) u.date = data.date;
+    if (data.date !== undefined) u.date = data.date || null;
     if (data.supplier !== undefined) u.supplier = data.supplier;
     if (data.description !== undefined) u.description = data.description;
     if (data.quantity !== undefined) u.quantity = data.quantity;
     if (data.price !== undefined) u.price = data.price;
     if (data.totalAmount !== undefined) u.total_amount = data.totalAmount;
     if (data.category !== undefined) u.category = data.category;
-    if (data.invoiceNumber !== undefined) u.invoice_number = data.invoiceNumber;
-    if (data.dueDate !== undefined) u.due_date = data.dueDate;
-    if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId;
+    if (data.invoiceNumber !== undefined) u.invoice_number = data.invoiceNumber || null;
+    if (data.dueDate !== undefined) u.due_date = data.dueDate || null;
+    if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId || null;
     if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
-    if (data.paidBy !== undefined) u.paid_by = data.paidBy;
+    if (data.paidBy !== undefined) u.paid_by = data.paidBy || null;
     if (data.status !== undefined) u.status = data.status;
     if (data.extractionConfidence !== undefined) u.extraction_confidence = data.extractionConfidence;
     if (data.lineItems !== undefined) u.line_items = data.lineItems;
-    await supabase.from('expenses').update(u).eq('id', id);
+    const { error } = await supabase.from('expenses').update(u).eq('id', id);
+    if (error) {
+      console.error('Expense update failed:', error);
+      return;
+    }
     set((s) => ({ expenses: s.expenses.map((e) => (e.id === id ? { ...e, ...data } : e)) }));
   },
 
   confirmExpense: async (id, data) => {
     const u: Record<string, any> = { status: 'confirmed' };
-    if (data.date !== undefined) u.date = data.date;
+    if (data.date !== undefined) u.date = data.date || null;
     if (data.supplier !== undefined) u.supplier = data.supplier;
     if (data.description !== undefined) u.description = data.description;
     if (data.quantity !== undefined) u.quantity = data.quantity;
     if (data.price !== undefined) u.price = data.price;
     if (data.totalAmount !== undefined) u.total_amount = data.totalAmount;
     if (data.category !== undefined) u.category = data.category;
-    if (data.invoiceNumber !== undefined) u.invoice_number = data.invoiceNumber;
-    if (data.dueDate !== undefined) u.due_date = data.dueDate;
-    if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId;
+    if (data.invoiceNumber !== undefined) u.invoice_number = data.invoiceNumber || null;
+    if (data.dueDate !== undefined) u.due_date = data.dueDate || null;
+    if (data.vendorTaxId !== undefined) u.vendor_tax_id = data.vendorTaxId || null;
     if (data.taxAmount !== undefined) u.tax_amount = data.taxAmount;
-    if (data.paidBy !== undefined) u.paid_by = data.paidBy;
+    if (data.paidBy !== undefined) u.paid_by = data.paidBy || null;
     if (data.lineItems !== undefined) u.line_items = data.lineItems;
-    await supabase.from('expenses').update(u).eq('id', id);
+    const { error } = await supabase.from('expenses').update(u).eq('id', id);
+    if (error) {
+      console.error('Expense confirm failed:', error);
+      return;
+    }
     set((s) => ({ expenses: s.expenses.map((e) => (e.id === id ? { ...e, ...data, status: 'confirmed' } : e)) }));
   },
 

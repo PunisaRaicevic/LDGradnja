@@ -154,13 +154,18 @@ export default function Expenses() {
     if (!editExpense || !editForm.description) return;
     const totalAmount = editForm.quantity * editForm.price;
     await updateExpense(editExpense.id, {
-      ...editForm,
+      date: editForm.date,
+      supplier: editForm.supplier,
+      description: editForm.description,
+      quantity: editForm.quantity,
+      price: editForm.price,
       totalAmount,
+      category: editForm.category,
       paidBy: editForm.paidBy || undefined,
       taxAmount: editForm.taxAmount,
-      invoiceNumber: editForm.invoiceNumber,
-      vendorTaxId: editForm.vendorTaxId,
-      dueDate: editForm.dueDate,
+      invoiceNumber: editForm.invoiceNumber || undefined,
+      vendorTaxId: editForm.vendorTaxId || undefined,
+      dueDate: editForm.dueDate || undefined,
     });
     setEditOpen(false);
     setEditExpense(null);
@@ -1002,19 +1007,19 @@ export default function Expenses() {
         <DialogContent onClose={() => { setDetailExpense(null); setDetailPreviewUrl(null); }} className="w-full max-w-4xl max-h-[90vh] overflow-hidden p-0">
           {detailExpense && (
             <>
-              <div className="flex items-center justify-between p-6 border-b">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <div className="p-4 pr-12 sm:p-6 sm:pr-14 border-b">
+                <div className="flex items-center gap-3 mb-2 sm:mb-0">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
                     <FileIcon className="w-5 h-5 text-primary" />
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Detalji fakture</h2>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold truncate">Detalji fakture</h2>
+                    <p className="text-sm text-muted-foreground truncate">
                       {detailExpense.invoiceNumber || detailExpense.supplier}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 ml-[52px]">
                   <Badge variant={statusConfig[detailExpense.status]?.variant || 'outline'}>
                     {statusConfig[detailExpense.status]?.label || detailExpense.status}
                   </Badge>
