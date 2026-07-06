@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatCurrency, formatDate } from './utils';
+import { formatCurrency, formatDate, toPdfText } from './utils';
 import type { InterimSituation, BillItem, SituationItem, PurchaseOrder, DiaryEntry } from '@/types';
 
 export function generateSituationPDF(
@@ -54,18 +54,18 @@ export function generateOrderPDF(order: PurchaseOrder, projectName: string) {
   const doc = new jsPDF();
 
   doc.setFontSize(18);
-  doc.text('PORUDŽBENICA', 105, 20, { align: 'center' });
+  doc.text(toPdfText('PORUDŽBENICA'), 105, 20, { align: 'center' });
 
   doc.setFontSize(12);
   doc.text(`Br: ${order.orderNumber}`, 14, 35);
-  doc.text(`Projekat: ${projectName}`, 14, 42);
+  doc.text(toPdfText(`Projekat: ${projectName}`), 14, 42);
   doc.text(`Datum: ${formatDate(order.date)}`, 14, 49);
-  doc.text(`Dobavljač: ${order.supplier}`, 14, 56);
+  doc.text(toPdfText(`Dobavljac: ${order.supplier}`), 14, 56);
 
   const tableData = order.items.map(item => [
     item.ordinal,
-    item.description,
-    item.unit,
+    toPdfText(item.description),
+    toPdfText(item.unit),
     item.quantity.toFixed(2),
     formatCurrency(item.unitPrice),
     formatCurrency(item.amount),
@@ -73,7 +73,7 @@ export function generateOrderPDF(order: PurchaseOrder, projectName: string) {
 
   autoTable(doc, {
     startY: 65,
-    head: [['R.br', 'Opis materijala', 'Jed. mjere', 'Količina', 'Jed. cijena', 'Iznos']],
+    head: [['R.br', 'Opis materijala', 'Jed. mjere', 'Kolicina', 'Jed. cijena', 'Iznos']],
     body: tableData,
     styles: { fontSize: 9 },
     headStyles: { fillColor: [29, 78, 216] },

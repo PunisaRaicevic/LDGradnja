@@ -43,6 +43,17 @@ export function getToday(): string {
   return local.toISOString().split('T')[0];
 }
 
+/** Transliterate Serbian-Latin diacritics to ASCII for jsPDF output. The
+ *  default jsPDF fonts (Helvetica) have no glyphs for č/ć/š/ž/đ, so they render
+ *  as garbage; this matches the app's existing ASCII fallback style. */
+export function toPdfText(s: unknown): string {
+  const map: Record<string, string> = {
+    'č': 'c', 'ć': 'c', 'š': 's', 'ž': 'z', 'đ': 'dj',
+    'Č': 'C', 'Ć': 'C', 'Š': 'S', 'Ž': 'Z', 'Đ': 'Dj',
+  };
+  return String(s ?? '').replace(/[čćšžđČĆŠŽĐ]/g, (ch) => map[ch] ?? ch);
+}
+
 /** Sanitize a filename for use in a Supabase Storage key: strip diacritics
  *  (č/ć/š/ž/đ) and replace anything Storage rejects. */
 export function sanitizeFileName(name: string): string {
