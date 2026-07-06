@@ -59,48 +59,36 @@ export const useUserStore = create<UserStore>((set) => ({
   },
 
   createUser: async (data) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Generate internal email for Supabase Auth (workers may not have real email)
-    const authEmail = data.email || `${data.username}@ldgradnja.local`;
-
-    // 1. Save admin session before creating new user
-    const { data: { session: adminSession } } = await supabase.auth.getSession();
-    if (!adminSession) throw new Error('Admin sesija nije aktivna');
-
-    // 2. Create Supabase Auth account so the user can log in
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: authEmail,
-      password: data.password,
+    // Account creation runs server-side in the `create-user` Edge Function
+    // (service role). This lets public signups stay DISABLED, and avoids the
+    // old client-side signUp that briefly swapped the admin's own session and
+    // could leave orphaned auth accounts on partial failure.
+    const { data: result, error } = await supabase.functions.invoke('create-user', {
+      body: {
+        username: data.username,
+        password: data.password,
+        fullName: data.fullName,
+        phone: data.phone,
+        role: data.role,
+        email: data.email || null,
+      },
     });
-
-    if (authError) {
-      throw new Error(authError.message);
-    }
-
-    // 3. Restore admin session (signUp may have switched to new user)
-    await supabase.auth.setSession({
-      access_token: adminSession.access_token,
-      refresh_token: adminSession.refresh_token,
-    });
-
-    // 4. Insert into app_users table with the auth user ID
-    const { data: row, error } = await supabase.from('app_users').insert({
-      admin_id: user.id,
-      username: data.username,
-      email: data.email || null,
-      full_name: data.fullName,
-      phone: data.phone,
-      role: data.role,
-      auth_user_id: authData.user?.id || null,
-    }).select().single();
 
     if (error) {
-      console.error('Error creating user:', error.message);
-      throw new Error(error.message);
+      // On a non-2xx response the function's JSON body (with our friendly
+      // { error } message) is on error.context, a Response object.
+      let msg = error.message;
+      try {
+        const ctx = (error as any).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const parsed = await ctx.json();
+          if (parsed?.error) msg = parsed.error;
+        }
+      } catch { /* fall back to error.message */ }
+      throw new Error(msg);
     }
-    if (row) set((s) => ({ users: [mapUser(row), ...s.users] }));
+    if (result?.error) throw new Error(result.error);
+    if (result?.user) set((s) => ({ users: [mapUser(result.user), ...s.users] }));
   },
 
   updateUser: async (id, data) => {
