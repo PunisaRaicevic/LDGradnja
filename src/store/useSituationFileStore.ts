@@ -80,9 +80,10 @@ export const useSituationFileStore = create<SituationFileStore>((set) => ({
     const fileType = getFileType(file.name);
     const safeFileName = sanitizeFileName(file.name);
     const filePath = `${user.id}/${projectId}/${crypto.randomUUID()}_${safeFileName}`;
-    await supabase.storage.from('situation-files').upload(filePath, file);
+    const { error: upErr } = await supabase.storage.from('situation-files').upload(filePath, file);
+    if (upErr) throw new Error(`Otpremanje fajla nije uspjelo: ${upErr.message}`);
 
-    const { data: row } = await supabase.from('situation_files').insert({
+    const { data: row, error } = await supabase.from('situation_files').insert({
       project_id: projectId,
       name: file.name,
       file_name: file.name,
@@ -91,6 +92,10 @@ export const useSituationFileStore = create<SituationFileStore>((set) => ({
       file_path: filePath,
       description: description || '',
     }).select().single();
+    if (error || !row) {
+      await supabase.storage.from('situation-files').remove([filePath]);
+      throw new Error(`Čuvanje fajla nije uspjelo: ${error?.message || 'nepoznata greška'}`);
+    }
 
     const sitFile = mapRow(row);
     set((s) => ({ files: [sitFile, ...s.files] }));
@@ -99,8 +104,9 @@ export const useSituationFileStore = create<SituationFileStore>((set) => ({
 
   deleteFile: async (id) => {
     const { data: row } = await supabase.from('situation_files').select('file_path').eq('id', id).single();
+    const { error } = await supabase.from('situation_files').delete().eq('id', id);
+    if (error) throw new Error(`Brisanje fajla nije uspjelo: ${error.message}`);
     if (row?.file_path) await supabase.storage.from('situation-files').remove([row.file_path]);
-    await supabase.from('situation_files').delete().eq('id', id);
     set((s) => ({ files: s.files.filter((f) => f.id !== id) }));
   },
 

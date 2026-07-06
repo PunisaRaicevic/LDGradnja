@@ -9,6 +9,24 @@ export default defineConfig(({ mode }) => {
   return {
     base: '/',
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        output: {
+          // Split only PURE (non-React) libs into their own chunks so no single
+          // chunk approaches ~1 MB — Appflow Live Update truncates oversized
+          // chunks and the APK boots to a white screen. React and everything
+          // that imports it (incl. react-pdf) MUST stay in one chunk.
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('/xlsx/')) return 'vendor-xlsx';
+            if (id.includes('/jspdf') || id.includes('jspdf-autotable')) return 'vendor-jspdf';
+            if (id.includes('/pdfjs-dist/')) return 'vendor-pdfjs';
+            if (id.includes('/dxf-parser/')) return 'vendor-dxf';
+            return 'vendor'; // react + all React consumers together
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

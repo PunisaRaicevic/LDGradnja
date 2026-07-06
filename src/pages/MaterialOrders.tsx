@@ -37,6 +37,8 @@ export default function MaterialOrders() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [supplier, setSupplier] = useState('');
   const [items, setItems] = useState<ItemForm[]>([{ description: '', unit: 'kom', quantity: 0, unitPrice: 0 }]);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) loadOrders(projectId);
@@ -57,9 +59,9 @@ export default function MaterialOrders() {
   };
 
   const handleCreate = async () => {
-    if (!projectId || !supplier || items.length === 0) return;
+    if (!projectId || !supplier || creating) return;
     const orderItems: Omit<OrderItem, 'id' | 'orderId'>[] = items
-      .filter((item) => item.description)
+      .filter((item) => item.description.trim())
       .map((item, index) => ({
         ordinal: index + 1,
         description: item.description,
@@ -69,10 +71,25 @@ export default function MaterialOrders() {
         amount: item.quantity * item.unitPrice,
       }));
 
-    await addOrder({ projectId, supplier, items: orderItems });
-    setDialogOpen(false);
-    setSupplier('');
-    setItems([{ description: '', unit: 'kom', quantity: 0, unitPrice: 0 }]);
+    // Guard AFTER filtering empty rows, so a supplier-only form with a blank
+    // item row can't create an empty €0.00 order.
+    if (orderItems.length === 0) {
+      setCreateError('Dodajte bar jednu stavku sa opisom.');
+      return;
+    }
+
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await addOrder({ projectId, supplier, items: orderItems });
+      setDialogOpen(false);
+      setSupplier('');
+      setItems([{ description: '', unit: 'kom', quantity: 0, unitPrice: 0 }]);
+    } catch (e: any) {
+      setCreateError(e?.message || 'Kreiranje porudžbenice nije uspjelo.');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleExportPDF = (orderId: string) => {
@@ -178,12 +195,17 @@ export default function MaterialOrders() {
       )}
 
       {/* Create Order Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)} className="max-w-3xl">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setCreateError(null); }}>
+        <DialogContent onClose={() => { setDialogOpen(false); setCreateError(null); }} className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Nova porudžbenica</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {createError && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {createError}
+              </div>
+            )}
             <div>
               <Label>Dobavljač *</Label>
               <Input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Naziv dobavljača" />
@@ -237,7 +259,7 @@ export default function MaterialOrders() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Otkaži</Button>
-            <Button onClick={handleCreate}>Kreiraj porudžbenicu</Button>
+            <Button onClick={handleCreate} disabled={creating}>{creating ? 'Kreiram...' : 'Kreiraj porudžbenicu'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

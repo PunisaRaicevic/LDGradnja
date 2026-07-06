@@ -81,6 +81,8 @@ export default function Expenses() {
   const [formShares, setFormShares] = useState<{ name: string; amount: number }[]>([]);
   const [receiptFile, setReceiptFile] = useState<File | undefined>();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // AI states
   const [aiScanOpen, setAiScanOpen] = useState(false);
@@ -141,19 +143,27 @@ export default function Expenses() {
   const totalTax = filtered.reduce((sum, e) => sum + (e.taxAmount || 0), 0);
 
   const handleSave = async () => {
-    if (!projectId || !form.description) return;
+    if (!projectId || !form.description || saving) return;
     const totalAmount = form.quantity * form.price;
     const validShares = formShares.filter(s => s.name && s.amount > 0);
-    await addExpense({
-      ...form, projectId, totalAmount,
-      paidBy: validShares.length === 1 ? validShares[0].name : (form.paidBy || undefined),
-      paidByShares: validShares.length > 0 ? validShares : undefined,
-      status: 'confirmed',
-    }, receiptFile);
-    setDialogOpen(false);
-    setForm(emptyForm);
-    setFormShares([]);
-    setReceiptFile(undefined);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await addExpense({
+        ...form, projectId, totalAmount,
+        paidBy: validShares.length === 1 ? validShares[0].name : (form.paidBy || undefined),
+        paidByShares: validShares.length > 0 ? validShares : undefined,
+        status: 'confirmed',
+      }, receiptFile);
+      setDialogOpen(false);
+      setForm(emptyForm);
+      setFormShares([]);
+      setReceiptFile(undefined);
+    } catch (e: any) {
+      setSaveError(e?.message || 'Čuvanje nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleEditOpen = (expense: Expense) => {
@@ -188,8 +198,10 @@ export default function Expenses() {
       price: editForm.price,
       totalAmount,
       category: editForm.category,
-      paidBy: validShares.length === 1 ? validShares[0].name : (editForm.paidBy || undefined),
-      paidByShares: validShares.length > 0 ? validShares : undefined,
+      // Pass '' / [] (never undefined) when cleared, so the store actually
+      // writes NULL instead of skipping the field and leaving the old value.
+      paidBy: validShares.length === 1 ? validShares[0].name : (editForm.paidBy || ''),
+      paidByShares: validShares.length > 0 ? validShares : [],
       taxAmount: editForm.taxAmount,
       invoiceNumber: editForm.invoiceNumber || undefined,
       vendorTaxId: editForm.vendorTaxId || undefined,
@@ -368,9 +380,11 @@ export default function Expenses() {
             <Button
               size="sm"
               className="bg-amber-500 hover:bg-amber-600 text-white"
-              onClick={() => {
-                const first = pendingExpenses[0];
-                if (first) confirmExpense(first.id, {});
+              onClick={async () => {
+                // Confirm every pending expense, not just the first one.
+                for (const p of [...pendingExpenses]) {
+                  await confirmExpense(p.id, {});
+                }
               }}
             >
               Potvrdi sve
@@ -661,12 +675,17 @@ export default function Expenses() {
       )}
 
       {/* Manual Add Expense Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)} className="max-w-lg">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSaveError(null); }}>
+        <DialogContent onClose={() => { setDialogOpen(false); setSaveError(null); }} className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Novi trošak</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {saveError && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {saveError}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Datum</Label>
@@ -702,6 +721,11 @@ export default function Expenses() {
                 <Label>Ukupno</Label>
                 <Input value={formatCurrency(form.quantity * form.price)} readOnly className="bg-muted" />
               </div>
+            </div>
+            <div>
+              <Label>PDV (€)</Label>
+              <Input type="number" step="0.01" value={form.taxAmount}
+                onChange={(e) => setForm({ ...form, taxAmount: parseFloat(e.target.value) || 0 })} />
             </div>
             {/* Ko je platio */}
             <div className="border rounded-lg p-3 space-y-2">
@@ -776,7 +800,7 @@ export default function Expenses() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Otkaži</Button>
-            <Button onClick={handleSave}>Dodaj</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Čuvam...' : 'Dodaj'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -929,7 +953,7 @@ export default function Expenses() {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>Otkaži</Button>
-            <Button variant="destructive" onClick={() => { if (deleteConfirmId) deleteExpense(deleteConfirmId); setDeleteConfirmId(null); }}>
+            <Button variant="destructive" onClick={async () => { try { if (deleteConfirmId) await deleteExpense(deleteConfirmId); } catch (e) { console.error(e); } finally { setDeleteConfirmId(null); } }}>
               <Trash2 className="h-4 w-4 mr-1" /> Obriši
             </Button>
           </DialogFooter>

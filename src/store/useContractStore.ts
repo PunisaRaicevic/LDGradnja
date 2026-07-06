@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Contract } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { sanitizeFileName } from '@/lib/utils';
 
 interface ContractStore {
   contracts: Contract[];
@@ -32,23 +33,28 @@ export const useContractStore = create<ContractStore>((set) => ({
 
   addContract: async (data, file) => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new Error('Sesija je istekla. Prijavite se ponovo.');
 
     let filePath: string | null = null;
     let fileName: string | null = null;
     if (file) {
-      filePath = `${user.id}/${data.projectId}/${crypto.randomUUID()}_${file.name}`;
+      filePath = `${user.id}/${data.projectId}/${crypto.randomUUID()}_${sanitizeFileName(file.name)}`;
       fileName = file.name;
-      await supabase.storage.from('contracts').upload(filePath, file);
+      const { error: upErr } = await supabase.storage.from('contracts').upload(filePath, file);
+      if (upErr) throw new Error(`Otpremanje ugovora nije uspjelo: ${upErr.message}`);
     }
 
-    const { data: row } = await supabase.from('contracts').insert({
+    const { data: row, error } = await supabase.from('contracts').insert({
       project_id: data.projectId, type: data.type, contract_number: data.contractNumber,
       date: data.date || null, amount: data.amount, deadline: data.deadline || null,
       party_name: data.partyName, contact_info: data.contactInfo, scope_of_work: data.scopeOfWork,
       payment_terms: data.paymentTerms, file_path: filePath, file_name: fileName,
     }).select().single();
-    if (row) set((s) => ({ contracts: [...s.contracts, mapRow(row)] }));
+    if (error || !row) {
+      if (filePath) await supabase.storage.from('contracts').remove([filePath]);
+      throw new Error(`Čuvanje ugovora nije uspjelo: ${error?.message || 'nepoznata greška'}`);
+    }
+    set((s) => ({ contracts: [...s.contracts, mapRow(row)] }));
   },
 
   updateContract: async (id, data) => {
@@ -68,8 +74,9 @@ export const useContractStore = create<ContractStore>((set) => ({
 
   deleteContract: async (id) => {
     const { data: row } = await supabase.from('contracts').select('file_path').eq('id', id).single();
+    const { error } = await supabase.from('contracts').delete().eq('id', id);
+    if (error) throw new Error(`Brisanje ugovora nije uspjelo: ${error.message}`);
     if (row?.file_path) await supabase.storage.from('contracts').remove([row.file_path]);
-    await supabase.from('contracts').delete().eq('id', id);
     set((s) => ({ contracts: s.contracts.filter((c) => c.id !== id) }));
   },
 }));

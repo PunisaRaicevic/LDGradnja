@@ -85,7 +85,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeProjects.map((project) => (
             <Link key={project.id} to={`/projects/${project.id}`}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer">

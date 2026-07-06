@@ -330,21 +330,37 @@ export default function Tasks() {
 
   const handleSendMessage = async () => {
     if (!projectId || !msgSender.trim() || (!msgText.trim() && !msgImage)) return;
+    if (sending) return; // guard against a second Enter before the first insert resolves
     setSending(true);
-    await sendMessage({
-      projectId,
-      senderName: msgSender.trim(),
-      content: msgText.trim(),
-    }, msgImage || undefined);
-    setMsgText('');
-    setMsgImage(null);
-    setSending(false);
+    try {
+      await sendMessage({
+        projectId,
+        senderName: msgSender.trim(),
+        content: msgText.trim(),
+      }, msgImage || undefined);
+      // Clear only after a successful send, so a failed send keeps the typed
+      // message and attached photo instead of silently discarding them.
+      setMsgText('');
+      setMsgImage(null);
+    } catch (e) {
+      console.error('Slanje poruke nije uspjelo:', e);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      if (!sending) handleSendMessage();
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      await deleteMessage(id);
+    } catch (e) {
+      console.error('Brisanje poruke nije uspjelo:', e);
     }
   };
 
@@ -435,7 +451,7 @@ export default function Tasks() {
                         <MessageBubble
                           key={msg.id}
                           message={msg}
-                          onDelete={deleteMessage}
+                          onDelete={handleDeleteMessage}
                           onImageClick={(url) => setPreviewImage(url)}
                         />
                       ))}
@@ -632,7 +648,7 @@ export default function Tasks() {
 
       {/* Task Detail Dialog */}
       <TaskDetailDialog
-        task={selectedTask}
+        task={selectedTask ? (tasks.find((t) => t.id === selectedTask.id) || selectedTask) : null}
         open={!!selectedTask}
         onClose={() => setSelectedTask(null)}
         onUpdate={updateTask}

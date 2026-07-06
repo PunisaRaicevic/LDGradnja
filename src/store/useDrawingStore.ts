@@ -73,18 +73,23 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
 
     const safeFileName = sanitizeFileName(file.name);
     const filePath = `${user.id}/${projectId}/${crypto.randomUUID()}_${safeFileName}`;
-    await supabase.storage.from('drawings').upload(filePath, file);
+    const { error: upErr } = await supabase.storage.from('drawings').upload(filePath, file);
+    if (upErr) throw new Error(`Otpremanje nacrta nije uspjelo: ${upErr.message}`);
 
     // Check existing versions
     const { count } = await supabase.from('drawings')
       .select('*', { count: 'exact', head: true })
       .eq('project_id', projectId).eq('name', file.name);
 
-    const { data: row } = await supabase.from('drawings').insert({
+    const { data: row, error } = await supabase.from('drawings').insert({
       project_id: projectId, name: file.name, file_name: file.name,
       file_type: fileType, file_size: file.size, version: (count || 0) + 1,
       file_path: filePath, description: description || '',
     }).select().single();
+    if (error || !row) {
+      await supabase.storage.from('drawings').remove([filePath]);
+      throw new Error(`Čuvanje nacrta nije uspjelo: ${error?.message || 'nepoznata greška'}`);
+    }
 
     const drawing = mapRow(row);
     set((s) => ({ drawings: [drawing, ...s.drawings] }));
@@ -93,8 +98,9 @@ export const useDrawingStore = create<DrawingStore>((set) => ({
 
   deleteDrawing: async (id) => {
     const { data: row } = await supabase.from('drawings').select('file_path').eq('id', id).single();
+    const { error } = await supabase.from('drawings').delete().eq('id', id);
+    if (error) throw new Error(`Brisanje nacrta nije uspjelo: ${error.message}`);
     if (row?.file_path) await supabase.storage.from('drawings').remove([row.file_path]);
-    await supabase.from('drawings').delete().eq('id', id);
     set((s) => ({ drawings: s.drawings.filter((d) => d.id !== id) }));
   },
 

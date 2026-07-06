@@ -46,6 +46,7 @@ export default function ConstructionDiary() {
   const [description, setDescription] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -121,13 +122,19 @@ export default function ConstructionDiary() {
   const handleConfirmUpload = async () => {
     if (!projectId || pendingFiles.length === 0) return;
     setUploading(true);
-    for (const file of pendingFiles) {
-      await addFile(projectId, file, description);
+    setUploadError(null);
+    try {
+      for (const file of pendingFiles) {
+        await addFile(projectId, file, description);
+      }
+      setUploadOpen(false);
+      setDescription('');
+      setPendingFiles([]);
+    } catch (e: any) {
+      setUploadError(e?.message || 'Otpremanje nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
-    setUploadOpen(false);
-    setDescription('');
-    setPendingFiles([]);
   };
 
   const handlePreview = async (file: ConstructionLogFile) => {
@@ -145,12 +152,13 @@ export default function ConstructionDiary() {
           setPreviewError('Nije moguće preuzeti fajl');
           return;
         }
-        const base64 = await new Promise<string>((resolve) => {
+        const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => {
             const result = reader.result as string;
             resolve(result.split(',')[1]);
           };
+          reader.onerror = () => reject(reader.error || new Error('Čitanje fajla nije uspjelo'));
           reader.readAsDataURL(blob);
         });
         const saved = await Filesystem.writeFile({
@@ -170,6 +178,8 @@ export default function ConstructionDiary() {
         });
       } catch (e: any) {
         setPreviewError(e.message || 'Greška pri otvaranju fajla');
+        setPreviewLoading(false);
+        return; // keep the dialog open so the error is visible
       }
       setPreviewLoading(false);
       setPreviewOpen(false);
@@ -178,6 +188,7 @@ export default function ConstructionDiary() {
 
     // Electron: open all files with system app + watch for editable types
     if ((window as any).electronAPI?.isElectron) {
+      let opened = false;
       try {
         const blob = await getFile(file.id);
         if (!blob) { setPreviewLoading(false); setPreviewError('Nije moguće preuzeti fajl'); return; }
@@ -190,16 +201,19 @@ export default function ConstructionDiary() {
           : await api.openFileWithSystem(buffer, file.fileName);
         if (!result.success) {
           setPreviewError(result.error || 'Greška pri otvaranju fajla');
-        } else if (result.watching) {
-          setWatchingFile(file.fileName);
-          setSyncMessage('Fajl otvoren — izmjene će se automatski sačuvati');
-          setTimeout(() => setSyncMessage(null), 4000);
+        } else {
+          opened = true;
+          if (result.watching) {
+            setWatchingFile(file.fileName);
+            setSyncMessage('Fajl otvoren — izmjene će se automatski sačuvati');
+            setTimeout(() => setSyncMessage(null), 4000);
+          }
         }
       } catch (e: any) {
         setPreviewError(e.message || 'Greška pri otvaranju fajla');
       }
       setPreviewLoading(false);
-      setPreviewOpen(false);
+      if (opened) setPreviewOpen(false); // on error keep dialog open to show it
       return;
     }
 
@@ -216,11 +230,11 @@ export default function ConstructionDiary() {
       const url = await getSignedUrl(file.id);
       if (url) {
         window.open(url, '_blank');
+        setPreviewOpen(false);
       } else {
         setPreviewError('Nije moguće generisati URL za pregled');
       }
       setPreviewLoading(false);
-      setPreviewOpen(false);
     }
   };
 
@@ -371,12 +385,17 @@ export default function ConstructionDiary() {
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!open) { setUploadOpen(false); setPendingFiles([]); setDescription(''); } }}>
-        <DialogContent onClose={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); }}>
+      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!open) { setUploadOpen(false); setPendingFiles([]); setDescription(''); setUploadError(null); } }}>
+        <DialogContent onClose={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); setUploadError(null); }}>
           <DialogHeader>
             <DialogTitle>Upload građevinske knjige</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {uploadError && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {uploadError}
+              </div>
+            )}
             <Input
               placeholder="Opis (opciono)"
               value={description}

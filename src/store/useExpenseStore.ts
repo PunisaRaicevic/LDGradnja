@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Expense } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchAllRows } from '@/lib/supabase';
+import { sanitizeFileName } from '@/lib/utils';
 
 interface ExpenseStore {
   expenses: Expense[];
@@ -38,29 +39,42 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
 
   loadExpenses: async (projectId) => {
     set({ loading: true });
-    const { data } = await supabase.from('expenses').select('*').eq('project_id', projectId).order('date', { ascending: false });
-    set({ expenses: (data || []).map(mapRow), loading: false });
+    try {
+      const data = await fetchAllRows(() =>
+        supabase.from('expenses').select('*').eq('project_id', projectId).order('date', { ascending: false }));
+      set({ expenses: data.map(mapRow), loading: false });
+    } catch (e) {
+      console.error('loadExpenses failed:', e);
+      set({ loading: false });
+    }
   },
 
   loadAllExpenses: async () => {
     set({ loading: true });
-    const { data } = await supabase.from('expenses').select('*').order('date', { ascending: false });
-    set({ expenses: (data || []).map(mapRow), loading: false });
+    try {
+      const data = await fetchAllRows(() =>
+        supabase.from('expenses').select('*').order('date', { ascending: false }));
+      set({ expenses: data.map(mapRow), loading: false });
+    } catch (e) {
+      console.error('loadAllExpenses failed:', e);
+      set({ loading: false });
+    }
   },
 
   addExpense: async (data, receiptFile) => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new Error('Sesija je istekla. Prijavite se ponovo.');
 
     let receiptFilePath: string | null = null;
     let receiptFileName: string | null = null;
     if (receiptFile) {
-      receiptFilePath = `${user.id}/${data.projectId}/${crypto.randomUUID()}_${receiptFile.name}`;
+      receiptFilePath = `${user.id}/${data.projectId}/${crypto.randomUUID()}_${sanitizeFileName(receiptFile.name)}`;
       receiptFileName = receiptFile.name;
-      await supabase.storage.from('receipts').upload(receiptFilePath, receiptFile);
+      const { error: upErr } = await supabase.storage.from('receipts').upload(receiptFilePath, receiptFile);
+      if (upErr) throw new Error(`Otpremanje računa nije uspjelo: ${upErr.message}`);
     }
 
-    const { data: row } = await supabase.from('expenses').insert({
+    const { data: row, error } = await supabase.from('expenses').insert({
       project_id: data.projectId, date: data.date, supplier: data.supplier,
       description: data.description, quantity: data.quantity, price: data.price,
       total_amount: data.totalAmount, category: data.category,
@@ -75,7 +89,12 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
       extraction_confidence: data.extractionConfidence || null,
       line_items: data.lineItems || null,
     }).select().single();
-    if (row) set((s) => ({ expenses: [mapRow(row), ...s.expenses] }));
+    if (error || !row) {
+      // Roll back the just-uploaded receipt so it doesn't dangle without a row.
+      if (receiptFilePath) await supabase.storage.from('receipts').remove([receiptFilePath]);
+      throw new Error(`Čuvanje troška nije uspjelo: ${error?.message || 'nepoznata greška'}`);
+    }
+    set((s) => ({ expenses: [mapRow(row), ...s.expenses] }));
   },
 
   updateExpense: async (id, data) => {
@@ -130,8 +149,11 @@ export const useExpenseStore = create<ExpenseStore>((set) => ({
 
   deleteExpense: async (id) => {
     const { data: row } = await supabase.from('expenses').select('receipt_file_path').eq('id', id).single();
+    // Delete the DB row first; only remove the receipt file once the row is
+    // actually gone, so a failed delete can never orphan the record from its file.
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
+    if (error) throw new Error(`Brisanje troška nije uspjelo: ${error.message}`);
     if (row?.receipt_file_path) await supabase.storage.from('receipts').remove([row.receipt_file_path]);
-    await supabase.from('expenses').delete().eq('id', id);
     set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) }));
   },
 }));

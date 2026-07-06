@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
   FileText, Calculator, ClipboardList, FileSignature,
-  Receipt, CheckSquare, ShoppingCart, Camera, MapPin, Calendar, User,
+  Receipt, CheckSquare, ShoppingCart, Camera, MapPin, Calendar, User, Loader2,
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -35,7 +35,7 @@ const modules = [
 export default function ProjectDetail() {
   const { projectId } = useParams();
   const location = useLocation();
-  const { projects, loadProjects } = useProjectStore();
+  const { projects, loading, loadProjects } = useProjectStore();
 
   useEffect(() => {
     if (projects.length === 0) loadProjects();
@@ -44,12 +44,23 @@ export default function ProjectDetail() {
   const project = projects.find((p) => p.id === projectId);
   const isModulePage = location.pathname.split('/').length > 3;
 
-  if (!project) {
-    return <p className="text-muted-foreground">Projekat nije pronađen.</p>;
-  }
-
+  // A module page renders its own content regardless of whether the parent
+  // project object is in memory yet, so never block it behind the lookup.
   if (isModulePage) {
     return <Outlet />;
+  }
+
+  if (!project) {
+    // Still fetching (or never fetched) — show a spinner instead of a false
+    // "not found" that flashes on load and sticks forever on a failed fetch.
+    if (loading || projects.length === 0) {
+      return (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    return <p className="text-muted-foreground">Projekat nije pronađen.</p>;
   }
 
   return (
@@ -70,7 +81,7 @@ export default function ProjectDetail() {
       </div>
 
       <h2 className="text-xl font-semibold mb-4">Moduli</h2>
-      <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {modules.map((mod) => (
           <Link key={mod.to} to={`/projects/${projectId}/${mod.to}`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

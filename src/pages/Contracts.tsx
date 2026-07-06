@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useContractStore } from '@/store/useContractStore';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,6 +36,9 @@ export default function Contracts() {
   const [activeTab, setActiveTab] = useState('investor');
   const [detailContract, setDetailContract] = useState<Contract | null>(null);
   const [detailPreviewUrl, setDetailPreviewUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const detailReqRef = useRef(0);
 
   useEffect(() => {
     if (projectId) loadContracts(projectId);
@@ -45,32 +48,58 @@ export default function Contracts() {
   const subContracts = contracts.filter((c) => c.type === 'subcontractor' && c.partyName.toLowerCase().includes(search.toLowerCase()));
 
   const handleSave = async () => {
-    if (!projectId || !form.partyName || !form.contractNumber) return;
-    await addContract({ ...form, projectId }, file);
-    setDialogOpen(false);
-    setForm(emptyForm);
-    setFile(undefined);
+    if (!projectId || !form.partyName || !form.contractNumber || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await addContract({ ...form, projectId }, file);
+      setDialogOpen(false);
+      setForm(emptyForm);
+      setFile(undefined);
+    } catch (e: any) {
+      setSaveError(e?.message || 'Čuvanje ugovora nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDownload = async (contract: Contract) => {
-    if (contract.filePath) {
-      const url = await getStorageUrl('contracts', contract.filePath);
-      if (url) {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = contract.fileName || 'ugovor';
-        a.click();
-      }
+    if (!contract.filePath) return;
+    const url = await getStorageUrl('contracts', contract.filePath);
+    if (!url) return;
+    // Signed URL is cross-origin → the `download` attribute is ignored and the
+    // browser opens the PDF in-tab. Fetch to a blob to force a real download.
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = contract.fileName || 'ugovor';
+      a.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteContract(id);
+    } catch (e) {
+      console.error('Brisanje ugovora nije uspjelo:', e);
     }
   };
 
   const handleRowClick = async (contract: Contract) => {
+    // Guard against out-of-order resolution: if the user clicks another
+    // contract before this signed URL resolves, don't overwrite the newer one.
+    const req = ++detailReqRef.current;
     setDetailContract(contract);
+    setDetailPreviewUrl(null);
     if (contract.filePath) {
       const url = await getStorageUrl('contracts', contract.filePath);
-      setDetailPreviewUrl(url);
-    } else {
-      setDetailPreviewUrl(null);
+      if (detailReqRef.current === req) setDetailPreviewUrl(url);
     }
   };
 
@@ -119,7 +148,7 @@ export default function Contracts() {
                           <Download className="h-4 w-4" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => deleteContract(contract.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(contract.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -152,7 +181,7 @@ export default function Contracts() {
                       <Download className="h-3.5 w-3.5 mr-1" /> Preuzmi
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => deleteContract(contract.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => handleDelete(contract.id)}>
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </div>
@@ -327,14 +356,19 @@ export default function Contracts() {
       </Dialog>
 
       {/* Add Contract Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent onClose={() => setDialogOpen(false)} className="max-w-lg">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSaveError(null); }}>
+        <DialogContent onClose={() => { setDialogOpen(false); setSaveError(null); }} className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
               Novi ugovor - {form.type === 'investor' ? 'Investitor' : 'Podizvođač'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {saveError && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {saveError}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Broj ugovora *</Label>
@@ -378,7 +412,7 @@ export default function Contracts() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Otkaži</Button>
-            <Button onClick={handleSave}>Sačuvaj</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? 'Čuvam...' : 'Sačuvaj'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

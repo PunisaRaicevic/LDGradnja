@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/store/useUserStore';
 import { useProjectStore } from '@/store/useProjectStore';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,9 +25,28 @@ const emptyForm = {
 export default function Users() {
   const {
     users, loading, loadUsers, createUser, updateUser, deleteUser,
-    projectMembers, loadProjectMembers, addProjectMember, removeProjectMember,
+    projectMembers, addProjectMember, removeProjectMember,
   } = useUserStore();
   const { projects, loadProjects } = useProjectStore();
+  const navigate = useNavigate();
+
+  // Route guard: a user with an explicit 'worker' record must not reach the
+  // user-administration screen. The owner/admin (frequently not present in
+  // app_users at all) is always allowed, so a legitimate admin is never locked out.
+  const [accessDenied, setAccessDenied] = useState(false);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !active) return;
+      const { data } = await supabase.from('app_users').select('role').eq('auth_user_id', user.id).maybeSingle();
+      if (active && data?.role === 'worker') {
+        setAccessDenied(true);
+        navigate('/', { replace: true });
+      }
+    })();
+    return () => { active = false; };
+  }, [navigate]);
 
   const [search, setSearch] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -99,15 +120,14 @@ export default function Users() {
     });
     setEditMode(false);
     setDetailOpen(true);
-    loadProjectMembers('');
-    // Load all project members for this user - we load per project, so load for all projects
+    // Clear synchronously (an async load-with-empty-projectId query could
+    // resolve later and wipe the correct member list — a race).
+    useUserStore.setState({ projectMembers: [] });
     loadUserProjectMembers(user.id);
   };
 
   const loadUserProjectMembers = async (userId: string) => {
-    // We need to query project_members for this specific user
-    // Since the store loads by projectId, we'll use supabase directly
-    const { supabase } = await import('@/lib/supabase');
+    // Query project_members for this specific user (the store loads by projectId).
     const { data } = await supabase
       .from('project_members')
       .select('*, app_users(full_name, email), projects(name)')
@@ -189,6 +209,8 @@ export default function Users() {
     (p) => !projectMembers.some((pm) => pm.projectId === p.id)
   );
 
+  if (accessDenied) return null; // redirecting non-admins away from user administration
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -220,7 +242,7 @@ export default function Users() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => (
             <Card
               key={user.id}

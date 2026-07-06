@@ -47,18 +47,26 @@ export const useOrderStore = create<OrderStore>((set) => ({
   },
 
   addOrder: async (data) => {
-    const { count } = await supabase.from('purchase_orders')
-      .select('*', { count: 'exact', head: true })
-      .eq('project_id', data.projectId);
+    // Next number derives from the highest EXISTING order number, not a
+    // head-count — a count reuses a number after any order is deleted, which
+    // would put a duplicate PO-XXXX on two different purchase orders.
+    const { data: lastRows } = await supabase.from('purchase_orders')
+      .select('order_number')
+      .eq('project_id', data.projectId)
+      .order('order_number', { ascending: false })
+      .limit(1);
+    const lastNum = lastRows?.[0]?.order_number
+      ? parseInt(String(lastRows[0].order_number).replace(/\D/g, ''), 10) || 0
+      : 0;
 
     const totalAmount = data.items.reduce((sum, i) => sum + i.amount, 0);
 
-    const { data: orderRow } = await supabase.from('purchase_orders').insert({
-      project_id: data.projectId, order_number: `PO-${String((count || 0) + 1).padStart(4, '0')}`,
+    const { data: orderRow, error } = await supabase.from('purchase_orders').insert({
+      project_id: data.projectId, order_number: `PO-${String(lastNum + 1).padStart(4, '0')}`,
       date: getToday(), supplier: data.supplier, total_amount: totalAmount, status: 'created',
       material_request_id: data.materialRequestId || null,
     }).select().single();
-    if (!orderRow) throw new Error('Failed to create order');
+    if (error || !orderRow) throw new Error(`Kreiranje porudžbenice nije uspjelo: ${error?.message || 'nepoznata greška'}`);
 
     const itemRows = data.items.map((i) => ({
       order_id: orderRow.id, ordinal: i.ordinal, description: i.description,
@@ -66,7 +74,7 @@ export const useOrderStore = create<OrderStore>((set) => ({
     }));
     const { data: insertedItems } = await supabase.from('order_items').insert(itemRows).select();
     const order = mapOrder(orderRow, (insertedItems || []).map(mapItem));
-    set((s) => ({ orders: [...s.orders, order] }));
+    set((s) => ({ orders: [order, ...s.orders] }));
     return order;
   },
 

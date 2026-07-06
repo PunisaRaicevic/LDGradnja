@@ -1,4 +1,4 @@
-import { type ClassValue, clsx } from "clsx";
+﻿import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -35,5 +35,19 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+  // Local calendar date (YYYY-MM-DD). Using toISOString() directly returns the
+  // UTC date, which in Montenegro (UTC+1/+2) rolls records entered after
+  // midnight back to the previous day.
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().split('T')[0];
+}
+
+/** Sanitize a filename for use in a Supabase Storage key: strip diacritics
+ *  (č/ć/š/ž/đ) and replace anything Storage rejects. */
+export function sanitizeFileName(name: string): string {
+  return name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_');
 }

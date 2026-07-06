@@ -31,6 +31,7 @@ export default function Drawings() {
   const [description, setDescription] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -118,13 +119,19 @@ export default function Drawings() {
   const handleConfirmUpload = async () => {
     if (!projectId || pendingFiles.length === 0) return;
     setUploading(true);
-    for (const file of pendingFiles) {
-      await addDrawing(projectId, file, description);
+    setUploadError(null);
+    try {
+      for (const file of pendingFiles) {
+        await addDrawing(projectId, file, description);
+      }
+      setUploadOpen(false);
+      setDescription('');
+      setPendingFiles([]);
+    } catch (e: any) {
+      setUploadError(e?.message || 'Otpremanje nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
-    setUploadOpen(false);
-    setDescription('');
-    setPendingFiles([]);
   };
 
   const handlePreview = async (id: string) => {
@@ -141,6 +148,7 @@ export default function Drawings() {
     if (drawing.fileType === 'dwg') {
       // On native mobile: download to cache and open with FileOpener (DWG FastView etc.)
       // On web: fallback to window.open with signed URL
+      let opened = false;
       if (Capacitor.isNativePlatform()) {
         try {
           const blob = await getDrawingFile(id);
@@ -150,12 +158,13 @@ export default function Drawings() {
             return;
           }
           // Convert blob to base64
-          const base64 = await new Promise<string>((resolve) => {
+          const base64 = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => {
               const result = reader.result as string;
               resolve(result.split(',')[1]);
             };
+            reader.onerror = () => reject(reader.error || new Error('Čitanje fajla nije uspjelo'));
             reader.readAsDataURL(blob);
           });
           // Write to cache directory
@@ -170,6 +179,7 @@ export default function Drawings() {
             filePath: saved.uri,
             contentType: 'application/acad',
           });
+          opened = true;
         } catch (e: any) {
           console.error('[DWG open]', e);
           setPreviewError(e.message || 'Greška pri otvaranju fajla');
@@ -198,10 +208,13 @@ export default function Drawings() {
 
           if (!result.success) {
             setPreviewError(result.error || 'Greška pri otvaranju fajla');
-          } else if (result.watching) {
-            setWatchingFile(fileName);
-            setSyncMessage('AutoCAD otvoren — izmjene ce se automatski sacuvati');
-            setTimeout(() => setSyncMessage(null), 4000);
+          } else {
+            opened = true;
+            if (result.watching) {
+              setWatchingFile(fileName);
+              setSyncMessage('AutoCAD otvoren — izmjene ce se automatski sacuvati');
+              setTimeout(() => setSyncMessage(null), 4000);
+            }
           }
         } catch (e: any) {
           setPreviewError(e.message || 'Greška pri otvaranju fajla');
@@ -223,10 +236,10 @@ export default function Drawings() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        opened = true;
       }
       setPreviewLoading(false);
-      setPreviewOpen(false);
-      setPreviewDrawing(null);
+      if (opened) { setPreviewOpen(false); setPreviewDrawing(null); } // on error keep dialog open to show it
       return;
     } else {
       const blob = await getDrawingFile(id);
@@ -253,15 +266,23 @@ export default function Drawings() {
     setPreviewError(null);
   };
 
-  const handleDownload = async (id: string, fileName: string) => {
+  const handleDownload = async (id: string, fileName?: string) => {
     const blob = await getDrawingFile(id);
     if (blob) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = fileName || 'nacrt'; // legacy rows may lack fileName → avoid saving a file literally named "undefined"
       a.click();
       URL.revokeObjectURL(url);
+    }
+  };
+
+  const handleDeleteDrawing = async (id: string) => {
+    try {
+      await deleteDrawing(id);
+    } catch (e) {
+      console.error('Brisanje nacrta nije uspjelo:', e);
     }
   };
 
@@ -334,7 +355,7 @@ export default function Drawings() {
                       <Button variant="ghost" size="icon" onClick={() => handleDownload(drawing.id, drawing.fileName)}>
                         <Download className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteDrawing(drawing.id)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteDrawing(drawing.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
@@ -368,7 +389,7 @@ export default function Drawings() {
                   <Button variant="outline" size="sm" onClick={() => handleDownload(drawing.id, drawing.fileName)}>
                     <Download className="h-3.5 w-3.5 mr-1" /> Preuzmi
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => deleteDrawing(drawing.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => handleDeleteDrawing(drawing.id)}>
                     <Trash2 className="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </div>
@@ -380,12 +401,17 @@ export default function Drawings() {
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!open) { setUploadOpen(false); setPendingFiles([]); setDescription(''); } }}>
-        <DialogContent onClose={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); }}>
+      <Dialog open={uploadOpen} onOpenChange={(open) => { if (!open) { setUploadOpen(false); setPendingFiles([]); setDescription(''); setUploadError(null); } }}>
+        <DialogContent onClose={() => { setUploadOpen(false); setPendingFiles([]); setDescription(''); setUploadError(null); }}>
           <DialogHeader>
             <DialogTitle>Upload crteza</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {uploadError && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {uploadError}
+              </div>
+            )}
             <Input placeholder="Opis (opciono)" value={description} onChange={(e) => setDescription(e.target.value)} />
             <FileUpload
               onFilesSelected={setPendingFiles}

@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -57,10 +58,13 @@ async def convert_dwg_to_dxf(file: UploadFile = File(...)):
             with open(output_path, "rb") as f:
                 dxf_content = f.read()
 
+            # Sanitize the user-supplied filename before echoing it into a response
+            # header (prevents header/response-splitting via crafted filenames).
+            safe_stem = re.sub(r'[^A-Za-z0-9._-]', '_', Path(file.filename).stem) or "output"
             return Response(
                 content=dxf_content,
                 media_type="application/dxf",
-                headers={"Content-Disposition": f"attachment; filename={file.filename.replace('.dwg', '.dxf')}"},
+                headers={"Content-Disposition": f'attachment; filename="{safe_stem}.dxf"'},
             )
         except subprocess.TimeoutExpired:
             raise HTTPException(500, "Konverzija je istekla (timeout)")
@@ -129,9 +133,17 @@ async def convert_dwg_to_svg(file: UploadFile = File(...)):
             raise HTTPException(500, f"SVG konverzija nije uspjela: {str(e)}")
 
 
+# Only the OpenAI-compatible endpoints the client actually uses are proxied.
+# This prevents an attacker from tunnelling arbitrary Google API calls
+# (files API, tuning, model management, ...) through the server-side key.
+ALLOWED_GEMINI_PATHS = {"chat/completions", "models"}
+
+
 @app.api_route("/api/gemini/{path:path}", methods=["POST", "GET"])
 async def gemini_proxy(path: str, request: Request):
     """Proxy requests to Gemini API (OpenAI-compatible endpoint) using server-side API key."""
+    if path not in ALLOWED_GEMINI_PATHS:
+        raise HTTPException(404, "Not found")
     api_key = os.environ.get("GEMINI_API_KEY", "")
     # Fallback: allow client to pass key (for local dev without env var)
     auth = f"Bearer {api_key}" if api_key else request.headers.get("Authorization", "")
@@ -171,12 +183,17 @@ if STATIC_DIR.is_dir():
     async def spa_fallback(request: Request, exc: StarletteHTTPException):
         # Only serve SPA for GET requests to non-API paths
         if request.method == "GET" and not request.url.path.startswith("/api/"):
-            # Serve actual static file if it exists
-            file_path = STATIC_DIR / request.url.path.lstrip("/")
-            if file_path.is_file():
-                return FileResponse(str(file_path))
+            # Resolve the requested path and ensure it stays inside STATIC_DIR.
+            # Without this containment check, "/../main.py" or "/../../etc/passwd"
+            # would escape the static root and serve arbitrary container files.
+            static_root = STATIC_DIR.resolve()
+            requested = (static_root / request.url.path.lstrip("/")).resolve()
+            if requested.is_file() and (
+                requested == static_root or static_root in requested.parents
+            ):
+                return FileResponse(str(requested))
             # Otherwise serve index.html for SPA client-side routing
-            index = STATIC_DIR / "index.html"
+            index = static_root / "index.html"
             if index.is_file():
                 return FileResponse(str(index))
         return JSONResponse({"detail": "Not Found"}, status_code=404)

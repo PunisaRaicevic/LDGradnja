@@ -23,7 +23,7 @@ interface ExpenseConfirmModalProps {
   previewUrl: string | null;
   previewType?: string;
   memberNames?: string[];
-  onConfirm: (data: ConfirmResult) => void;
+  onConfirm: (data: ConfirmResult) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -96,23 +96,34 @@ export default function ExpenseConfirmModal({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (isSaving) return; // guard against double-submit (fast double-tap)
     setIsSaving(true);
     const validShares = shares.filter(s => s.name && s.amount > 0);
-    onConfirm({
-      ...extractedData,
-      date: formData.date,
-      invoiceNumber: formData.invoiceNumber,
-      supplier: formData.supplier,
-      vendorTaxId: formData.vendorTaxId,
-      description: formData.description,
-      dueDate: formData.dueDate,
-      category: formData.category,
-      taxAmount: Number(formData.taxAmount),
-      totalAmount: Number(formData.totalAmount),
-      paidBy: validShares.length === 1 ? validShares[0].name : (paidBy || undefined),
-      paidByShares: validShares.length > 0 ? validShares : undefined,
-    });
+    try {
+      // Await so the button stays disabled for the whole save; without the
+      // await, React batches setIsSaving(true/false) into one render and the
+      // modal never actually disables — a double-click inserts twice.
+      await onConfirm({
+        ...extractedData,
+        date: formData.date,
+        invoiceNumber: formData.invoiceNumber,
+        supplier: formData.supplier,
+        vendorTaxId: formData.vendorTaxId,
+        description: formData.description,
+        dueDate: formData.dueDate,
+        category: formData.category,
+        taxAmount: Number(formData.taxAmount),
+        totalAmount: Number(formData.totalAmount),
+        paidBy: validShares.length === 1 ? validShares[0].name : (paidBy || undefined),
+        paidByShares: validShares.length > 0 ? validShares : undefined,
+      });
+    } catch (e) {
+      // onConfirm failed (e.g. insert error) — keep the modal open so the user
+      // can retry instead of silently losing the scanned data.
+      setIsSaving(false);
+      return;
+    }
     setIsSaving(false);
   };
 

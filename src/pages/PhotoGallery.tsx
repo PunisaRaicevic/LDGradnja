@@ -19,6 +19,8 @@ export default function PhotoGallery() {
   const [description, setDescription] = useState('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectId) loadPhotos(projectId);
@@ -38,10 +40,12 @@ export default function PhotoGallery() {
     loadUrls();
   }, [photos]);
 
-  const filtered = photos.filter((p) =>
-    (p.description || '').toLowerCase().includes(search.toLowerCase()) ||
-    p.date.includes(search)
-  );
+  const filtered = photos.filter((p) => {
+    const q = search.toLowerCase();
+    return (p.description || '').toLowerCase().includes(q)
+      || p.date.includes(search)                 // ISO form (2026-07-06)
+      || formatDate(p.date).includes(search);    // displayed form (06.07.2026)
+  });
 
   const groupedByDate = filtered.reduce((acc, photo) => {
     const date = photo.date;
@@ -51,13 +55,21 @@ export default function PhotoGallery() {
   }, {} as Record<string, typeof filtered>);
 
   const handleUpload = async () => {
-    if (!projectId || selectedFiles.length === 0) return;
-    for (const file of selectedFiles) {
-      await addPhoto(projectId, file, description);
+    if (!projectId || selectedFiles.length === 0 || uploading) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      for (const file of selectedFiles) {
+        await addPhoto(projectId, file, description);
+      }
+      setUploadOpen(false);
+      setSelectedFiles([]);
+      setDescription('');
+    } catch (e: any) {
+      setUploadError(e?.message || 'Otpremanje nije uspjelo. Pokušajte ponovo.');
+    } finally {
+      setUploading(false);
     }
-    setUploadOpen(false);
-    setSelectedFiles([]);
-    setDescription('');
   };
 
   const handlePreview = (photo: typeof photos[0]) => {
@@ -65,13 +77,30 @@ export default function PhotoGallery() {
     if (url) setPreviewUrl(url);
   };
 
-  const handleDownload = (photo: typeof photos[0]) => {
+  const handleDownload = async (photo: typeof photos[0]) => {
     const url = photoUrls[photo.id];
-    if (url) {
+    if (!url) return;
+    // The signed URL is cross-origin, so the `download` attribute is ignored and
+    // the browser navigates away instead. Fetch to a blob and download that.
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
+      a.href = objectUrl;
       a.download = photo.fileName;
       a.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleDeletePhoto = async (id: string) => {
+    try {
+      await deletePhoto(id);
+    } catch (e) {
+      console.error('Brisanje fotografije nije uspjelo:', e);
     }
   };
 
@@ -103,7 +132,7 @@ export default function PhotoGallery() {
           .map(([date, datePhotos]) => (
             <div key={date} className="mb-6">
               <h3 className="text-lg font-semibold mb-3">{formatDate(date)}</h3>
-              <div className="grid grid-cols-2 lg:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {datePhotos.map((photo) => (
                   <Card key={photo.id} className="overflow-hidden group">
                     <div
@@ -124,7 +153,7 @@ export default function PhotoGallery() {
                           <Button variant="secondary" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleDownload(photo); }}>
                             <Download className="h-4 w-4" />
                           </Button>
-                          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); deletePhoto(photo.id); }}>
+                          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -141,12 +170,17 @@ export default function PhotoGallery() {
       )}
 
       {/* Upload Dialog */}
-      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent onClose={() => setUploadOpen(false)}>
+      <Dialog open={uploadOpen} onOpenChange={(open) => { setUploadOpen(open); if (!open) setUploadError(null); }}>
+        <DialogContent onClose={() => { setUploadOpen(false); setUploadError(null); }}>
           <DialogHeader>
             <DialogTitle>Upload fotografija</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {uploadError && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                {uploadError}
+              </div>
+            )}
             <div>
               <Label>Opis</Label>
               <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opis fotografija (opciono)" />
@@ -161,7 +195,7 @@ export default function PhotoGallery() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUploadOpen(false)}>Otkaži</Button>
-            <Button onClick={handleUpload} disabled={selectedFiles.length === 0}>Upload</Button>
+            <Button onClick={handleUpload} disabled={selectedFiles.length === 0 || uploading}>{uploading ? 'Uploadujem...' : 'Upload'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
