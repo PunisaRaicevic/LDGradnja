@@ -40,7 +40,7 @@ export default function Login() {
               <Building2 className="h-8 w-8 text-white" />
             </div>
           </div>
-          <CardTitle className="text-2xl">LDGradnja</CardTitle>
+          <CardTitle className="text-2xl">ServiceX CONSTRUCTION</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Upravljanje gradjevinskim projektima
           </p>

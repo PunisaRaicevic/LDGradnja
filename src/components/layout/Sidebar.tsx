@@ -70,7 +70,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
         {(!collapsed || mobileOpen) && (
           <div className="flex items-center gap-2">
             <Building2 className="h-6 w-6 text-primary-foreground" />
-            <span className="font-bold text-lg">LDGradnja</span>
+            <span className="font-bold text-lg">ServiceX CONSTRUCTION</span>
           </div>
         )}
         {/* Desktop: collapse toggle */}
